@@ -11,6 +11,7 @@ import (
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/plugin"
 	goPlugin "github.com/hashicorp/go-plugin"
         "encoding/json"
+        "time"
 )
 
 // SomePlugin this is the struct that implements the plugin.AccessRequester
@@ -55,8 +56,14 @@ func (p *SomePlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application)
 	p.Logger.Info("This is a call to the GrantAccess method")
 	jsonAr, _ := json.Marshal(ar)
 	jsonApp, _ := json.Marshal(app)
+        labelEnvironment, _ := json.Marshal(app.ObjectMeta.Labels["environment"])
 	p.Logger.Debug("jsonAr: " + string(jsonAr))
 	p.Logger.Debug("jsonApp: " + string(jsonApp))
+	p.Logger.Debug("labelEnvironment: " + string(labelEnvironment))
+	// Set duration to 5 seconds
+        ar.Spec.Duration.Duration = 5 * time.Second
+        jsonAr, _ = json.Marshal(ar)
+        p.Logger.Debug(string(jsonAr))
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusGranted,
 		// The message can be returned as markdown
