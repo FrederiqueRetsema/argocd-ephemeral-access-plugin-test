@@ -51,3 +51,4 @@ EphemeralAccess extension with your plugin configured by running the
 following command:
 
     kustomize build ./manifests | kubectl apply -f -
+
