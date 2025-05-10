@@ -14,72 +14,54 @@ import (
         "time"
 )
 
-// SomePlugin this is the struct that implements the plugin.AccessRequester
-// interface. It is preferable (but not required) to rename this struct to
-// something related to what your plugin will be doing. Example: JiraPlugin
-type SomePlugin struct {
+type TopdeskPlugin struct {
 	Logger hclog.Logger
 }
 
-// This function will be called once when the EphemeralAccess controller is
-// initialized. It can be used to instantiate clients to other services needed by
-// this plugin for example. Those instances can then be assigned in this p for
-// later use. Just return nil of this is not required for your plugin.
-func (p *SomePlugin) Init() error {
-	p.Logger.Info("This is a call to the Init method")
+func (p *TopdeskPlugin) Init() error {
+	p.Logger.Debug("This is a call to the Init method")
 	return nil
 }
 
-// GrantAccess is the method that will be called by the EphemeralAccess
-// controller when an AccessRequest is created. It must return the
-// GrantResponse with one of the possible Status defined:
-//
-//   - GrantStatusGranted: The EphemeralAccess controller will proceed
-//     granting the access for the given AccessRequest (ar)
-//
-//   - GrantStatusDenied: The EphemeralAccess controller will update the given
-//     AccessRequest with denied status and no further action will be executed
-//     in it.
-//
-//   - GrantStatusPending: Instructs to the EphemeralAccess controller that the
-//     given AccessRequest can not be granted yet. It will cause the controller to
-//     retry after the period configured in the EPHEMERAL_CONTROLLER_REQUEUE_INTERVAL
-//     configuration
-//
-// Returning a nil GrantResponse will cause an error in the EphemeralAccess controller
-// and no access will be granted.
-// This function can be used to addresss different use-cases.
-// A few examples are:
-// - verify if the given app has an associated Change Request in approved state
-// - access internal service for last mile user access validation
-func (p *SomePlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
-	p.Logger.Info("This is a call to the GrantAccess method")
+func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
+    p.Logger.Debug("This is a call to the GrantAccess method")
+
+	username := ar.Spec.Subject.Username
+	role := ar.Spec.Role.TemplateRef.Name
+	namespace := ar.Spec.Application.Namespace
+	application := ar.Spec.Application.Name
+	duration := ar.Spec.Duration.Duration.String()
+
+	infoText := fmt.Sprintf("GrantAccess: username: %s, role: %s, application: [%s]%s, duration: %s", username, role, namespace, application, duration)
+	p.Logger.Info(infoText)
+
 	jsonAr, _ := json.Marshal(ar)
 	jsonApp, _ := json.Marshal(app)
-        labelEnvironment, _ := json.Marshal(app.ObjectMeta.Labels["environment"])
+    labelEnvironment, _ := json.Marshal(app.ObjectMeta.Labels["environment"])
 	p.Logger.Debug("jsonAr: " + string(jsonAr))
 	p.Logger.Debug("jsonApp: " + string(jsonApp))
 	p.Logger.Debug("labelEnvironment: " + string(labelEnvironment))
-	// Set duration to 5 seconds
-        ar.Spec.Duration.Duration = 5 * time.Second
-        jsonAr, _ = json.Marshal(ar)
-        p.Logger.Debug(string(jsonAr))
+	// Set duration to 5 minutes
+	ar.Spec.Duration.Duration = 5 * time.Minutes
+	jsonAr, _ = json.Marshal(ar)
+	p.Logger.Debug(string(jsonAr))
+
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusGranted,
 		// The message can be returned as markdown
-		Message: "Granted access by the example plugin",
+		Message: "Granted access by the Topdesk plugin",
 	}, nil
 }
 
 // RevokeAccess is the method that will be called by the EphemeralAccess controller
 // when an AccessRequest is expired. Plugins authors may decide to not implement this
 // method depending on the use case. In this case it is safe to just return nil, nil.
-func (p *SomePlugin) RevokeAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.RevokeResponse, error) {
+func (p *TopdeskPlugin) RevokeAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.RevokeResponse, error) {
 	p.Logger.Info("This is a call to the RevokeAccess method")
 	return &plugin.RevokeResponse{
 		Status: plugin.RevokeStatusRevoked,
 		// The message can be returned as markdown
-		Message: "Revoked access by the example plugin",
+		Message: "Revoked access by the Topdesk plugin",
 	}, nil
 }
 
@@ -96,7 +78,7 @@ func main() {
 	// create a new instance of your plugin after initializing the logger and other
 	// dependencies. However it is preferable to leave the main function lean and
 	// initialize plugin dependencies in the `Init` method.
-	p := &SomePlugin{
+	p := &TopdeskPlugin{
 		Logger: logger,
 	}
 
