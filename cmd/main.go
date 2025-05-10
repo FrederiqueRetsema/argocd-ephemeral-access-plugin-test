@@ -42,7 +42,7 @@ func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applicati
 	p.Logger.Debug("jsonApp: " + string(jsonApp))
 	p.Logger.Debug("labelEnvironment: " + string(labelEnvironment))
 	// Set duration to 5 minutes
-	ar.Spec.Duration.Duration = 5 * time.Minutes
+	ar.Spec.Duration.Duration = 5 * time.Minute
 	jsonAr, _ = json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
 
