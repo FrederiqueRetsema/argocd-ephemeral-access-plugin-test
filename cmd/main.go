@@ -40,12 +40,17 @@ func (p *TopdeskPlugin) showRequest(ar *api.AccessRequest, app *argocd.Applicati
 	p.Logger.Debug("jsonApp: " + string(jsonApp))
 }
 
-func (p *TopdeskPlugin) getCIName() string {
+func (p *TopdeskPlugin) getCIName(app *argocd.Application) string {
 	ciLabel := os.Getenv("CI_LABEL")
 	if ciLabel == "" {
-			p.Logger.Debug("No CI_LABEL environment variable, assuming CILabel")
-			ciLabel = "CILabel"
+			p.Logger.Debug("No CI_LABEL environment variable, assuming CIName")
+			ciLabel = "CIName"
 	}
+
+	p.Logger.Debug("Look for "+ciLabel+" in metadata...")
+	labelCIName, _ := json.Marshal(app.ObjectMeta.Labels[ciLabel])
+	p.Logger.Debug("labelCIName: " + string(labelCIName))
+
 	return  ciLabel
 }
 
@@ -54,10 +59,8 @@ func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applicati
 
 	p.showRequest(ar, app)
 
-	CIName := p.getCIName()
+	CIName := p.getCIName(app)
 
-	labelCIName, _ := json.Marshal(app.ObjectMeta.Labels[CIName])
-	p.Logger.Debug("labelCIName: " + string(labelCIName))
 	// Set duration to 5 minutes
     ar.Spec.Duration.Duration = 5 * time.Minute
 	jsonAr, _ = json.Marshal(ar)
