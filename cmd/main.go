@@ -40,7 +40,7 @@ func (p *TopdeskPlugin) showRequest(ar *api.AccessRequest, app *argocd.Applicati
 	p.Logger.Debug("jsonApp: " + string(jsonApp))
 }
 
-func (p *TopdeskPlugin) getCIName(app *argocd.Application) string {
+func (p *TopdeskPlugin) getCIName(app *argocd.Application) (string, string) {
 	ciLabel := os.Getenv("CI_LABEL")
 	if ciLabel == "" {
 			p.Logger.Debug("No CI_LABEL environment variable, assuming ci_name")
@@ -66,15 +66,15 @@ func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applicati
 	p.showRequest(ar, app)
 
 	ciLabel, ciName := p.getCIName(app)
-	if ciName == "" {
+	if ciName == "\"\"" {
      	application := ar.Spec.Application.Name
-		return p.DenyAccess("No label "+ciName+" in app "+application)
+		return p.DenyAccess("No label "+ciLabel+" in app "+application)
 	}
 	p.Logger.Debug("Search for "+ciName+" in the CMDB...")
 
 	// Set duration to 5 minutes
     ar.Spec.Duration.Duration = 5 * time.Minute
-	jsonAr, _ = json.Marshal(ar)
+	jsonAr, _ := json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
 
 	return &plugin.GrantResponse{

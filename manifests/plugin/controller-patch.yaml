@@ -22,6 +22,8 @@ spec:
           env:
             - name: EPHEMERAL_PLUGIN_PATH
               value: /tmp/plugin/plugin
+            - name: CI_LABEL
+              value: ci_name
           volumeMounts:
             - name: plugins
               mountPath: /tmp/plugin/
