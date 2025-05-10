@@ -6,7 +6,7 @@ metadata:
 spec:
   template:
     spec:
-      imagePullSecret:
+      imagePullSecrets:
         - name: aws-ecr-secret
       initContainers:
         - name: plugin-installer

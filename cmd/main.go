@@ -43,15 +43,21 @@ func (p *TopdeskPlugin) showRequest(ar *api.AccessRequest, app *argocd.Applicati
 func (p *TopdeskPlugin) getCIName(app *argocd.Application) string {
 	ciLabel := os.Getenv("CI_LABEL")
 	if ciLabel == "" {
-			p.Logger.Debug("No CI_LABEL environment variable, assuming CIName")
-			ciLabel = "CIName"
+			p.Logger.Debug("No CI_LABEL environment variable, assuming ci_name")
+			ciLabel = "ci_name"
 	}
 
 	p.Logger.Debug("Look for "+ciLabel+" in metadata...")
-	labelCIName, _ := json.Marshal(app.ObjectMeta.Labels[ciLabel])
-	p.Logger.Debug("labelCIName: " + string(labelCIName))
+	ciName, _ := json.Marshal(app.ObjectMeta.Labels[ciLabel])
 
-	return  ciLabel
+	return  ciLabel, string(ciName)
+}
+
+func (p *TopdeskPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
+	return &plugin.GrantResponse{
+		Status: plugin.GrantStatusDenied,
+		Message: reason,
+	}, nil
 }
 
 func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
@@ -59,7 +65,12 @@ func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applicati
 
 	p.showRequest(ar, app)
 
-	CIName := p.getCIName(app)
+	ciLabel, ciName := p.getCIName(app)
+	if ciName == "" {
+     	application := ar.Spec.Application.Name
+		return p.DenyAccess("No label "+ciName+" in app "+application)
+	}
+	p.Logger.Debug("Search for "+ciName+" in the CMDB...")
 
 	// Set duration to 5 minutes
     ar.Spec.Duration.Duration = 5 * time.Minute
