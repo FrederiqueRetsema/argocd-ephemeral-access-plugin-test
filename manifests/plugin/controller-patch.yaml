@@ -6,6 +6,8 @@ metadata:
 spec:
   template:
     spec:
+      imagePullSecret:
+        - name: aws-ecr-secret
       initContainers:
         - name: plugin-installer
           image: CHANGE_THIS_TO_POINT_TO_YOUR_PLUGIN_IMAGE

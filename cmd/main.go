@@ -10,8 +10,9 @@ import (
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/log"
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/plugin"
 	goPlugin "github.com/hashicorp/go-plugin"
-        "encoding/json"
-        "time"
+    "encoding/json"
+    "time"
+	"os"
 )
 
 type TopdeskPlugin struct {
@@ -23,9 +24,7 @@ func (p *TopdeskPlugin) Init() error {
 	return nil
 }
 
-func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
-    p.Logger.Debug("This is a call to the GrantAccess method")
-
+func (p *TopdeskPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
 	username := ar.Spec.Subject.Username
 	role := ar.Spec.Role.TemplateRef.Name
 	namespace := ar.Spec.Application.Namespace
@@ -37,12 +36,30 @@ func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applicati
 
 	jsonAr, _ := json.Marshal(ar)
 	jsonApp, _ := json.Marshal(app)
-    labelEnvironment, _ := json.Marshal(app.ObjectMeta.Labels["environment"])
 	p.Logger.Debug("jsonAr: " + string(jsonAr))
 	p.Logger.Debug("jsonApp: " + string(jsonApp))
-	p.Logger.Debug("labelEnvironment: " + string(labelEnvironment))
+}
+
+func (p *TopdeskPlugin) getCIName() string {
+	ciLabel := os.Getenv("CI_LABEL")
+	if ciLabel == "" {
+			p.Logger.Debug("No CI_LABEL environment variable, assuming CILabel")
+			ciLabel = "CILabel"
+	}
+	return  ciLabel
+}
+
+func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
+	p.Logger.Debug("This is a call to the GrantAccess method")
+
+	p.showRequest(ar, app)
+
+	CIName := p.getCIName()
+
+	labelCIName, _ := json.Marshal(app.ObjectMeta.Labels[CIName])
+	p.Logger.Debug("labelCIName: " + string(labelCIName))
 	// Set duration to 5 minutes
-	ar.Spec.Duration.Duration = 5 * time.Minute
+    ar.Spec.Duration.Duration = 5 * time.Minute
 	jsonAr, _ = json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
 
