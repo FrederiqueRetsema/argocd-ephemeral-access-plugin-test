@@ -7,13 +7,15 @@ import (
 	api "github.com/argoproj-labs/argocd-ephemeral-access/api/ephemeral-access/v1alpha1"
 	"github.com/hashicorp/go-hclog"
 
+	"context"
+	"encoding/json"
+	"os"
+	"time"
+
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/log"
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/plugin"
 	goPlugin "github.com/hashicorp/go-plugin"
-    "encoding/json"
-    "time"
-	"os"
-	"context"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -46,24 +48,24 @@ func (p *TopdeskPlugin) showRequest(ar *api.AccessRequest, app *argocd.Applicati
 func (p *TopdeskPlugin) getCIName(app *argocd.Application) (string, string) {
 	ciLabel := os.Getenv("CI_LABEL")
 	if ciLabel == "" {
-			p.Logger.Debug("No CI_LABEL environment variable, assuming ci_name")
-			ciLabel = "ci_name"
+		p.Logger.Debug("No CI_LABEL environment variable, assuming ci_name")
+		ciLabel = "ci_name"
 	}
 
-	p.Logger.Debug("Look for "+ciLabel+" in metadata...")
+	p.Logger.Debug("Look for " + ciLabel + " in metadata...")
 	ciName, _ := json.Marshal(app.ObjectMeta.Labels[ciLabel])
 
-	return  ciLabel, string(ciName)
+	return ciLabel, string(ciName)
 }
 
 func (p *TopdeskPlugin) getSNOWCredentials(app *argocd.Application) (string, string) {
 	secretName := os.Getenv("SNOW_SECRET_NAME")
-	if ciLabel == "" {
-			p.Logger.Debug("No SNOW_SECRET_NAME environment variable, assuming snow_credentials")
-			secretName = "snow_credentials"
+	if secretName == "" {
+		p.Logger.Debug("No SNOW_SECRET_NAME environment variable, assuming snow_credentials")
+		secretName = "snow_credentials"
 	}
 
-	p.Logger.Debug("Get credentials from secret "+secretName+"...")
+	p.Logger.Debug("Get credentials from secret " + secretName + "...")
 
 	config, err := rest.InClusterConfig()
 	if err != nil {
@@ -75,17 +77,18 @@ func (p *TopdeskPlugin) getSNOWCredentials(app *argocd.Application) (string, str
 		panic(err.Error())
 	}
 
-	secret, err := clientset.CoreV1().Secrets("").List(context.TODO(), secretName, metav1.ListOptions{})
+	secret, err := clientset.CoreV1().Secrets("").Get(context.TODO(), secretName, metav1.GetOptions{})
 	jsonSecret, _ := json.Marshal(secret)
 
+	p.Logger.Debug(err.Error())
 	p.Logger.Debug(string(jsonSecret))
 
-	return  nil, nil
+	return "", ""
 }
 
 func (p *TopdeskPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
 	return &plugin.GrantResponse{
-		Status: plugin.GrantStatusDenied,
+		Status:  plugin.GrantStatusDenied,
 		Message: reason,
 	}, nil
 }
@@ -97,15 +100,15 @@ func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applicati
 
 	ciLabel, ciName := p.getCIName(app)
 	if ciName == "\"\"" {
-     	application := ar.Spec.Application.Name
-		return p.DenyAccess("No label "+ciLabel+" in app "+application)
+		application := ar.Spec.Application.Name
+		return p.DenyAccess("No label " + ciLabel + " in app " + application)
 	}
-	p.Logger.Debug("Search for "+ciName+" in the CMDB...")
+	p.Logger.Debug("Search for " + ciName + " in the CMDB...")
 
-    // curl "https://dev202720.service-now.com/api/sn_chg_rest/change?cmdb_ci=f68cb36b83556210674cf655eeaad360" --request GET --header "Accept:application/json" --user 'admin':'AYMAo^h8+0tq'
+	// curl "https://dev202720.service-now.com/api/sn_chg_rest/change?cmdb_ci=f68cb36b83556210674cf655eeaad360" --request GET --header "Accept:application/json" --user 'admin':'AYMAo^h8+0tq'
 
 	// Set duration to 5 minutes
-    ar.Spec.Duration.Duration = 5 * time.Minute
+	ar.Spec.Duration.Duration = 5 * time.Minute
 	jsonAr, _ := json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
 
