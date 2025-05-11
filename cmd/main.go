@@ -13,6 +13,9 @@ import (
     "encoding/json"
     "time"
 	"os"
+	"context"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 type TopdeskPlugin struct {
@@ -53,6 +56,33 @@ func (p *TopdeskPlugin) getCIName(app *argocd.Application) (string, string) {
 	return  ciLabel, string(ciName)
 }
 
+func (p *TopdeskPlugin) getSNOWCredentials(app *argocd.Application) (string, string) {
+	secretName := os.Getenv("SNOW_SECRET_NAME")
+	if ciLabel == "" {
+			p.Logger.Debug("No SNOW_SECRET_NAME environment variable, assuming snow_credentials")
+			secretName = "snow_credentials"
+	}
+
+	p.Logger.Debug("Get credentials from secret "+secretName+"...")
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	secret, err := clientset.CoreV1().Secrets("").List(context.TODO(), secretName, metav1.ListOptions{})
+	jsonSecret, _ := json.Marshal(secret)
+
+	p.Logger.Debug(string(jsonSecret))
+
+	return  nil, nil
+}
+
 func (p *TopdeskPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusDenied,
@@ -71,6 +101,8 @@ func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applicati
 		return p.DenyAccess("No label "+ciLabel+" in app "+application)
 	}
 	p.Logger.Debug("Search for "+ciName+" in the CMDB...")
+
+    // curl "https://dev202720.service-now.com/api/sn_chg_rest/change?cmdb_ci=f68cb36b83556210674cf655eeaad360" --request GET --header "Accept:application/json" --user 'admin':'AYMAo^h8+0tq'
 
 	// Set duration to 5 minutes
     ar.Spec.Duration.Duration = 5 * time.Minute

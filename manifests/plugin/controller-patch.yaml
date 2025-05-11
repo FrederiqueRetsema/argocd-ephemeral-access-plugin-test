@@ -20,6 +20,12 @@ spec:
       containers:
         - name: controller
           env:
+            - name: SNOW_SECRET_NAME
+              value: CHANGE_THIS_WITH_THE_SNOW_SECRET
+            - name: SERVICE_NOW_URL
+              value: CHANGE_THIS_TO_POINT_TO_YOUR_SNOW_URL
+            - name: CMDB_CLASS_NAME
+              value: CHANGE_THIS_WITH_CMDB_CLASS_NAME
             - name: EPHEMERAL_PLUGIN_PATH
               value: /tmp/plugin/plugin
             - name: CI_LABEL
