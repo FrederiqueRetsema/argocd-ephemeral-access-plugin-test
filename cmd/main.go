@@ -1,23 +1,27 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
+	"os"
+	"time"
+
+	"encoding/json"
+	"net/http"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	argocd "github.com/argoproj-labs/argocd-ephemeral-access/api/argoproj/v1alpha1"
 	api "github.com/argoproj-labs/argocd-ephemeral-access/api/ephemeral-access/v1alpha1"
 	"github.com/hashicorp/go-hclog"
 
-	"context"
-	"encoding/json"
-	"os"
-	"time"
-
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/log"
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/plugin"
 	goPlugin "github.com/hashicorp/go-plugin"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 type TopdeskPlugin struct {
@@ -53,7 +57,8 @@ func (p *TopdeskPlugin) getCIName(app *argocd.Application) (string, string) {
 	}
 
 	p.Logger.Debug("Look for " + ciLabel + " in metadata...")
-	ciName, _ := json.Marshal(app.ObjectMeta.Labels[ciLabel])
+	ciName := app.ObjectMeta.Labels[ciLabel]
+	p.Logger.Debug("ciLabel found = " + ciName)
 
 	return ciLabel, string(ciName)
 }
@@ -78,12 +83,68 @@ func (p *TopdeskPlugin) getSNOWCredentials() (string, string) {
 	}
 
 	secret, err := clientset.CoreV1().Secrets("").Get(context.TODO(), secretName, metav1.GetOptions{})
-	jsonSecret, _ := json.Marshal(secret)
+	if err != nil {
+		p.Logger.Debug(err.Error())
+	}
 
-	p.Logger.Debug(err.Error())
+	jsonSecret, _ := json.Marshal(secret)
 	p.Logger.Debug(string(jsonSecret))
 
-	return "", ""
+	return string(secret.Data["username"]), string(secret.Data["password"])
+}
+
+func (p *TopdeskPlugin) getCI(username string, password string, ciName string) string {
+	snowUrl := os.Getenv("SERVICE_NOW_URL")
+	if snowUrl == "" {
+		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
+	}
+
+	cmdbClassName := os.Getenv("CMDB_CLASS_NAME")
+	if cmdbClassName == "" {
+		p.Logger.Debug("No CMDB Class Name (environment variable CMDB_CLASS_NAME is empty), assuming u_cmdb_ci_kubernetes_application")
+		cmdbClassName = "u_cmdb_ci_kubernetes_application"
+	}
+	url := fmt.Sprintf("%s/api/now/cmdb/instance/%s?sysparm_query=name=%s", snowUrl, cmdbClassName, ciName)
+	p.Logger.Debug("Call to: " + url)
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		p.Logger.Error("Error in NewRequest: " + err.Error())
+	}
+	req.Header.Add("Accept", "application/json")
+	req.SetBasicAuth(username, password)
+	resp, err := client.Do(req)
+	if err != nil {
+		p.Logger.Error("Error in client.Do: " + err.Error())
+	}
+
+	defer resp.Body.Close()
+
+	type s struct {
+		result ([]struct {
+			sys_id string
+			name   string
+		})
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		p.Logger.Error("Error in io.ReadAll: " + err.Error())
+	}
+
+	p.Logger.Debug(string(body))
+
+	var jsonData s
+	err = json.Unmarshal(body, &jsonData)
+	if err != nil {
+		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
+	}
+
+	sys_id := jsonData.result[0].sys_id
+	p.Logger.Debug("sys_id: " + fmt.Sprint(len(jsonData.result)) + " - " + sys_id)
+
+	return ""
 }
 
 func (p *TopdeskPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
@@ -96,6 +157,8 @@ func (p *TopdeskPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error)
 func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
 	p.Logger.Debug("This is a call to the GrantAccess method")
 
+	username, password := p.getSNOWCredentials()
+
 	p.showRequest(ar, app)
 
 	ciLabel, ciName := p.getCIName(app)
@@ -105,9 +168,9 @@ func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applicati
 	}
 	p.Logger.Debug("Search for " + ciName + " in the CMDB...")
 
-	_, _ = p.getSNOWCredentials()
-
 	// curl "https://dev202720.service-now.com/api/sn_chg_rest/change?cmdb_ci=f68cb36b83556210674cf655eeaad360" --request GET --header "Accept:application/json" --user 'admin':'AYMAo^h8+0tq'
+
+	_ = p.getCI(username, password, ciName)
 
 	// Set duration to 5 minutes
 	ar.Spec.Duration.Duration = 5 * time.Minute
