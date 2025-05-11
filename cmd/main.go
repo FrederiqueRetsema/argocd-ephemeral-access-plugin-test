@@ -58,11 +58,11 @@ func (p *TopdeskPlugin) getCIName(app *argocd.Application) (string, string) {
 	return ciLabel, string(ciName)
 }
 
-func (p *TopdeskPlugin) getSNOWCredentials(app *argocd.Application) (string, string) {
+func (p *TopdeskPlugin) getSNOWCredentials() (string, string) {
 	secretName := os.Getenv("SNOW_SECRET_NAME")
 	if secretName == "" {
-		p.Logger.Debug("No SNOW_SECRET_NAME environment variable, assuming snow_credentials")
-		secretName = "snow_credentials"
+		p.Logger.Debug("No SNOW_SECRET_NAME environment variable, assuming snow-secret")
+		secretName = "snow-secret"
 	}
 
 	p.Logger.Debug("Get credentials from secret " + secretName + "...")
@@ -104,6 +104,8 @@ func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applicati
 		return p.DenyAccess("No label " + ciLabel + " in app " + application)
 	}
 	p.Logger.Debug("Search for " + ciName + " in the CMDB...")
+
+	_, _ = p.getSNOWCredentials()
 
 	// curl "https://dev202720.service-now.com/api/sn_chg_rest/change?cmdb_ci=f68cb36b83556210674cf655eeaad360" --request GET --header "Accept:application/json" --user 'admin':'AYMAo^h8+0tq'
 
