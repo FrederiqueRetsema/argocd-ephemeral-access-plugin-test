@@ -229,7 +229,7 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
 func (p *ServiceNowPlugin) checkChange(change change_type) string {
 //	type,number,short_description,start_date,end_date", snowUrl, ciName)
 	errorText := ""
-	type := change.Type
+	changeType := change.Type
 	var startDate time
 	err := startDate.UnmarshalText([]byte(change.StartDate))
 	if err != nil {
@@ -239,6 +239,9 @@ func (p *ServiceNowPlugin) checkChange(change change_type) string {
 	if err != nil {
 		p.Logger.Debug(err)
 	}
+	p.Logger.Debug(fmt.Sprintf("%d", startDate))
+	p.Logger.Debug(fmt.Sprintf("%d", endDate))
+	p.Logger.Debug(changeType)
 
 	return errorText
 }
