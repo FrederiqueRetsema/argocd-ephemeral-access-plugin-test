@@ -24,8 +24,8 @@ spec:
               value: CHANGE_THIS_WITH_THE_SNOW_SECRET_NAME
             - name: SERVICE_NOW_URL
               value: CHANGE_THIS_TO_POINT_TO_YOUR_SNOW_URL
-            - name: CMDB_CLASS_NAME
-              value: CHANGE_THIS_WITH_CMDB_CLASS_NAME
+            - name: EPHEMERAL_ACCESS_NAMESPACE
+              value: argocd-ephemeral-access
             - name: EPHEMERAL_PLUGIN_PATH
               value: /tmp/plugin/plugin
             - name: CI_LABEL

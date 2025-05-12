@@ -28,6 +28,15 @@ type ServiceNowPlugin struct {
 	Logger hclog.Logger
 }
 
+type cmdb_type *struct {
+	InstallStatus string `json:"install_status"`
+	Name string `json:"name"`
+}
+
+type cmdb_results_type *struct {
+	Result []cmdb_type `json:"result"` 
+}
+
 func (p *ServiceNowPlugin) Init() error {
 	p.Logger.Debug("This is a call to the Init method")
 	return nil
@@ -64,6 +73,12 @@ func (p *ServiceNowPlugin) getCIName(app *argocd.Application) (string, string) {
 }
 
 func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
+	namespace := os.Getenv("EPHEMERAL_ACCESS_NAMESPACE")
+	if namespace == "" {
+		p.Logger.Debug("No EPHEMERAL_ACCESS_NAMESPACE environment variable, assuming argocd-ephemeral-access")
+		namespace = "argocd-ephemeral-access"
+	}
+
 	secretName := os.Getenv("SNOW_SECRET_NAME")
 	if secretName == "" {
 		p.Logger.Debug("No SNOW_SECRET_NAME environment variable, assuming snow-secret")
@@ -82,9 +97,9 @@ func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 		panic(err.Error())
 	}
 
-	secret, err := clientset.CoreV1().Secrets("").Get(context.TODO(), secretName, metav1.GetOptions{})
+	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 	if err != nil {
-		p.Logger.Debug(err.Error())
+		panic(err.Error())
 	}
 
 	jsonSecret, _ := json.Marshal(secret)
@@ -93,13 +108,13 @@ func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 	return string(secret.Data["username"]), string(secret.Data["password"])
 }
 
-func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) string {
+func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) *cmdb_type {
 	snowUrl := os.Getenv("SERVICE_NOW_URL")
 	if snowUrl == "" {
 		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
 	}
 
-	url := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=operational_status,install_status,name", snowUrl, ciName)
+	url := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
 	p.Logger.Debug("Call to: " + url)
 
 	client := &http.Client{}
@@ -117,16 +132,6 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 
 	defer resp.Body.Close()
 
-	type cmdb_type *struct {
-		OperationalStatus string `json:"operational_status"`
-		InstallStatus string `json:"install_status"`
-		Name string `json:"name"`
-	}
-
-	type cmdb_results_type *struct {
-		Result []cmdb_type `json:"result"` 
-	}
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		p.Logger.Error("Error in io.ReadAll: " + err.Error())
@@ -140,10 +145,14 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
 	}
 
-	p.Logger.Debug("OperationalStatus: "+cmdbResults.Result[0].OperationalStatus+", InstallStatus: "+cmdbResults.Result[0].InstallStatus+", "+cmdbResults.Result[0].Name)
+	p.Logger.Debug("InstallStatus: "+cmdbResults.Result[0].InstallStatus+", CI name: "+cmdbResults.Result[0].Name)
 
-	return ""
+	return cmdbResults.Result[0]
 }
+
+func (p *ServiceNowPlugin) checkCI(CI cmdb_type) (*plugin.GrantResponse, error) {
+
+
 
 func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
 	return &plugin.GrantResponse{
