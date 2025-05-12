@@ -227,14 +227,14 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
 	return errorText
 }
 
-func (p *ServiceNowPlugin) checkChange(change change_type) (string, Duration) {
+func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duration) {
 //	type,number,short_description,start_date,end_date", snowUrl, ciName)
 	var startDateTime time.Time
 	var endDateTime time.Time
 
 	errorText := ""
-	var diff Duration
-	_ = diff.UnmarshalText([]byte("0h0m0s"))
+	var remainingTime time.Duration
+	_ = remainingTime.UnmarshalText([]byte("0h0m0s"))
 
 	changeNumber := change.Number
 	changeShortDescription := change.ShortDescription
@@ -258,12 +258,12 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, Duration) {
 	                             changeNumber, changeShortDescription, startDateString, endDateString)
 		p.Logger.Debug(errorText)
 	} else {
-		diff = endDateTime.Sub(time.Now())
+		remainingTime = endDateTime.Sub(time.Now())
 	}
 
 	p.Logger.Debug(changeType)
 
-	return errorText, diff
+	return errorText, remainingTime
 }
 
 func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
@@ -304,14 +304,17 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	changes := p.getChanges(username, password, ciName)
 	validChange := false
 	errorString = ""
+	var changeRemainingTime Duration 
 	for _, change := range changes {
-		errorString, diff = p.checkChange(change)
+		errorString, remainingTime := p.checkChange(change)
 		if errorString == "" {
 			validChange = true
 
 			changeNumber = change.Number
 			changeType = change.Type
 			changeShortDescription = change.ShortDescription
+			changeRemainingTime = remainingTime
+			changeEndDate = change.EndDate
 
 			break
 		}
@@ -323,17 +326,16 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		p.Logger.Error("Access Denied for "+requesterName+" : "+errorString)
 		return p.DenyAccess(errorString)
 	} 
-
 	
-	// Set duration to 5 minutes
-	ar.Spec.Duration.Duration = endDateTime
+	// Set duration to the time left for this (valid) change
+	ar.Spec.Duration.Duration = changeRemainingTime
 	jsonAr, _ := json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
 
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusGranted,
 		// The message can be returned as markdown
-		Message: "Granted access by the ServiceNow plugin",
+		Message: fmt.Sprint("Granted access: change __%s__ (%s), until __%s__", changeNumber, changeShortDescription, changeEndDate)
 	}, nil
 }
 
