@@ -38,10 +38,29 @@ type cmdb_results_type *struct {
 	Result []cmdb_type `json:"result"` 
 }
 
+type change_type *struct {
+	Type string `json:"type"`
+	Number string `json:"number"`
+	State float64 `json:"state"`
+	Phase string `json:"phase"`
+	CMDBCi string `json:"cmdb_ci"`
+	Active string `json:"active"`
+	EndDate string `json:"end_date"`
+	ShortDescription string `json:"short_description"`
+	StartDate string `json:"start_date"`
+	Approval string `json:"approval"` 
+}
+
+type change_results_type *struct {
+	Result []change_type `json:"result"`
+}
+
 func (p *ServiceNowPlugin) Init() error {
 	p.Logger.Debug("This is a call to the Init method")
 	return nil
 }
+
+snowUrl := os.Getenv("SERVICE_NOW_URL")
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
 	username := ar.Spec.Subject.Username
@@ -109,7 +128,90 @@ func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 	return string(secret.Data["username"]), string(secret.Data["password"])
 }
 
-func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) *cmdb_type {
+func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) cmdb_type {
+	if snowUrl == "" {
+		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
+	}
+
+	url := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
+	p.Logger.Debug("Call to: " + url)
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		p.Logger.Error("Error in NewRequest: " + err.Error())
+	}
+
+	req.Header.Add("Accept", "application/json")
+	req.SetBasicAuth(username, password)
+	resp, err := client.Do(req)
+	if err != nil {
+		p.Logger.Error("Error in client.Do: " + err.Error())
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		p.Logger.Error("Error in io.ReadAll: " + err.Error())
+	}
+
+	p.Logger.Debug(string(body))
+
+	var cmdbResults cmdb_results_type
+	err = json.Unmarshal(body, &cmdbResults)
+	if err != nil {
+		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
+	}
+
+	p.Logger.Debug("InstallStatus: "+cmdbResults.Result[0].InstallStatus+", CI name: "+cmdbResults.Result[0].Name)
+
+	return cmdbResults.Result[0]
+}
+
+func (p *ServiceNowPlugin) getChange(username string, password string, ciName string) change_type {
+	if snowUrl == "" {
+		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
+	}
+
+	url := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date", snowUrl, ciName)
+	p.Logger.Debug("Call to: " + url)
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		p.Logger.Error("Error in NewRequest: " + err.Error())
+	}
+
+	req.Header.Add("Accept", "application/json")
+	req.SetBasicAuth(username, password)
+	resp, err := client.Do(req)
+	if err != nil {
+		p.Logger.Error("Error in client.Do: " + err.Error())
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		p.Logger.Error("Error in io.ReadAll: " + err.Error())
+	}
+
+	p.Logger.Debug(string(body))
+
+	var changeResults change_results_type
+	err = json.Unmarshal(body, &changeResults)
+	if err != nil {
+		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
+	}
+
+	p.Logger.Debug("Type: "+changeResults.Result[0].Type+", Short description: "+changeResults.Result[0].ShortDescription+
+                   ", Start Date: "+changeResults.Result[0].StartDate+", End Date: "+changeResults.Result[0].EndDate)
+
+	return changeResults.Result[0]
+}
+
+func (p *ServiceNowPlugin) getChange(username string, password string, ciName string) change_type {
 	snowUrl := os.Getenv("SERVICE_NOW_URL")
 	if snowUrl == "" {
 		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
@@ -156,15 +258,15 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
 	installStatus := CI.InstallStatus
 	ciName := CI.Name
 
-	validInstallStatus = []int {
-		1,              // Installed
-		3,				// In maintenance
-		4, 				// Pending install
-		5				// Pending repair
+	validInstallStatus = []string {
+		"1",            // Installed
+		"3",			// In maintenance
+		"4", 			// Pending install
+		"5",			// Pending repair
 	}
 
 	if !slices.Contains(validInstallStatus, installStatus) {
-		errorText = fmt.Sprintf("Invalid install status: %d for CI %s", installStatus, ciName)
+		errorText = fmt.Sprintf("Invalid install status (%s) for CI %s", installStatus, ciName)
 	}
 
 	return errorText
