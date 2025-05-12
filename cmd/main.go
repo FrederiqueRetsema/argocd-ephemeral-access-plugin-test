@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"time"
 
 	"encoding/json"
@@ -150,9 +151,24 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 	return cmdbResults.Result[0]
 }
 
-func (p *ServiceNowPlugin) checkCI(CI cmdb_type) (*plugin.GrantResponse, error) {
+func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
+	errorText := ""
+	installStatus := CI.InstallStatus
+	ciName := CI.Name
 
+	validInstallStatus = []int {
+		1,              // Installed
+		3,				// In maintenance
+		4, 				// Pending install
+		5				// Pending repair
+	}
 
+	if !slices.Contains(validInstallStatus, installStatus) {
+		errorText = fmt.Sprintf("Invalid install status: %d for CI %s", installStatus, ciName)
+	}
+
+	return errorText
+}
 
 func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
 	return &plugin.GrantResponse{
@@ -175,9 +191,12 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 	p.Logger.Debug("Search for " + ciName + " in the CMDB...")
 
-	// curl "https://dev202720.service-now.com/api/sn_chg_rest/change?cmdb_ci=f68cb36b83556210674cf655eeaad360" --request GET --header "Accept:application/json" --user 'admin':'AYMAo^h8+0tq'
-
-	_ = p.getCI(username, password, ciName)
+	CI := p.getCI(username, password, ciName)
+	errorString := p.checkCI(CI)
+	if errorString != "" {
+		p.Logger.Error("Access Denied for "+ar.Spec.Subject.Username+" : "+errorString)
+		return p.DenyAccess(errorString)
+	}
 
 	// Set duration to 5 minutes
 	ar.Spec.Duration.Duration = 5 * time.Minute
