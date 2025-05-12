@@ -327,7 +327,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 	
 	if validChange {
-		p.Logger.Info(fmt.Sprint("Granted access for %s: %s change %s (%s)", requesterName, changeType, changeNumber, changeShortDescription))
+		p.Logger.Info(fmt.Sprintf("Granted access for %s: %s change %s (%s)", requesterName, changeType, changeNumber, changeShortDescription))
 	} else {
 		p.Logger.Error("Access Denied for "+requesterName+" : "+errorString)
 		return p.DenyAccess(errorString)
