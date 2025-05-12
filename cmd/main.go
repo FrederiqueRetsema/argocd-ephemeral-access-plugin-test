@@ -248,8 +248,8 @@ func (p *ServiceNowPlugin) checkChange(change change_type) string {
 		p.Logger.Debug(err)
 	}
 
-    if time.Time.Now() < startDateTime ||
-	   time.Time.Now() > endDateTime {
+    if time.Now() < startDateTime ||
+	   time.Now() > endDateTime {
 		errorText = fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s ",
 	                             changeNumber, changeShortDescription, startDateString, endDateString)
 		p.Logger.Debug(errorText)
