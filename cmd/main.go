@@ -234,7 +234,7 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 
 	errorText := ""
 	var remainingTime time.Duration
-	_ = remainingTime.Unmarshal([]byte("0h0m0s"))
+	remainingTime = 0
 
 	changeNumber := change.Number
 	changeShortDescription := change.ShortDescription
@@ -278,7 +278,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 	changeNumber := ""
 	changeType := ""
-	changeShortDuration := ""
+	changeShortDescription := ""
 	changeEndDate := ""
 
 	snowUrl = os.Getenv("SERVICE_NOW_URL")
