@@ -236,20 +236,20 @@ func (p *ServiceNowPlugin) checkChange(change change_type) string {
 
     startDateString := strings.Replace(change.StartDate," ","T",-1)+"Z"
 	var startDateTime time.Time
-	err := startDateTime.UnmarshalText([]byte(startDate))
+	err := startDateTime.UnmarshalText([]byte(startDateString))
 	if err != nil {
-		p.Logger.Debug(err)
+		p.Logger.Debug(err.Error())
 	}
 
 	endDateString := strings.Replace(change.EndDate," ","T",-1)+"Z"
 	var endDateTime time.Time
-	err := endDateTime.Unmarchal([]byte(endDateString))
+	err = endDateTime.UnmarchalText([]byte(endDateString))
 	if err != nil {
-		p.Logger.Debug(err)
+		p.Logger.Debug(err.Error())
 	}
 
-    if time.Now() < startDateTime ||
-	   time.Now() > endDateTime {
+    if endDateTime.Before(time.Now()) ||
+	   startDateTime.After(time.Now()) {
 		errorText = fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s ",
 	                             changeNumber, changeShortDescription, startDateString, endDateString)
 		p.Logger.Debug(errorText)
