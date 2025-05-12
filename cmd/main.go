@@ -238,7 +238,6 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 
 	changeNumber := change.Number
 	changeShortDescription := change.ShortDescription
-	changeType := change.Type
 
     startDateString := strings.Replace(change.StartDate," ","T",-1)+"Z"
 	err := startDateTime.UnmarshalText([]byte(startDateString))
