@@ -60,7 +60,7 @@ func (p *ServiceNowPlugin) Init() error {
 	return nil
 }
 
-snowUrl := os.Getenv("SERVICE_NOW_URL")
+var snowUrl string
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
 	username := ar.Spec.Subject.Username
@@ -93,9 +93,9 @@ func (p *ServiceNowPlugin) getCIName(app *argocd.Application) (string, string) {
 }
 
 func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
-	namespace := os.Getenv("EPHEMERAL_ACCESS_NAMESPACE")
+	namespace := os.Getenv("SECRET_NAMESPACE")
 	if namespace == "" {
-		p.Logger.Debug("No EPHEMERAL_ACCESS_NAMESPACE environment variable, assuming argocd-ephemeral-access")
+		p.Logger.Debug("No SECRET_NAMESPACE environment variable, assuming argocd-ephemeral-access")
 		namespace = "argocd-ephemeral-access"
 	}
 
@@ -212,7 +212,6 @@ func (p *ServiceNowPlugin) getChange(username string, password string, ciName st
 }
 
 func (p *ServiceNowPlugin) getChange(username string, password string, ciName string) change_type {
-	snowUrl := os.Getenv("SERVICE_NOW_URL")
 	if snowUrl == "" {
 		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
 	}
@@ -282,6 +281,7 @@ func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, err
 func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
 	p.Logger.Debug("This is a call to the GrantAccess method")
 
+	snowUrl = os.Getenv("SERVICE_NOW_URL")
 	username, password := p.getSNOWCredentials()
 
 	p.showRequest(ar, app)
