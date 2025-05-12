@@ -170,7 +170,7 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 	return cmdbResults.Result[0]
 }
 
-func (p *ServiceNowPlugin) getChange(username string, password string, ciName string) change_type {
+func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string) []change_type {
 	url := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date", snowUrl, ciName)
 	p.Logger.Debug("Call to: " + url)
 
@@ -205,7 +205,7 @@ func (p *ServiceNowPlugin) getChange(username string, password string, ciName st
 	p.Logger.Debug("Type: "+changeResults.Result[0].Type+", Short description: "+changeResults.Result[0].ShortDescription+
                    ", Start Date: "+changeResults.Result[0].StartDate+", End Date: "+changeResults.Result[0].EndDate)
 
-	return changeResults.Result[0]
+	return changeResults.Result
 }
 
 func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
@@ -295,11 +295,16 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		return p.DenyAccess(errorString)
 	}
 
-	change := p.getChange(username, password, ciName)
-	errorString = p.checkChange(change)
-	if errorString != "" {
-		p.Logger.Error("Access Denied for "+ar.Spec.Subject.Username+" : "+errorString)
-		return p.DenyAccess(errorString)
+	changes := p.getChanges(username, password, ciName)
+	for _, change := range changes {
+		errorString = p.checkChange(change)
+		if errorString != "" {
+			p.Logger.Error("Access Denied for "+ar.Spec.Subject.Username+" : "+errorString)
+			return p.DenyAccess(errorString)
+		}
+		else {
+			break
+		}
 	}
 	
 	// Set duration to 5 minutes
