@@ -231,6 +231,7 @@ func (p *ServiceNowPlugin) checkChange(change change_type) string {
 //	type,number,short_description,start_date,end_date", snowUrl, ciName)
 	errorText := ""
 	changeNumber := change.Number
+	changeShortDescription := change.ShortDescription
 	changeType := change.Type
 
     startDateString := strings.Replace(change.StartDate," ","T",-1)+"Z"
@@ -241,6 +242,7 @@ func (p *ServiceNowPlugin) checkChange(change change_type) string {
 	}
 
 	endDateString := strings.Replace(change.EndDate," ","T",-1)+"Z"
+	var endDateTime time.Time
 	err := endDateTime.Unmarchal([]byte(endDateString))
 	if err != nil {
 		p.Logger.Debug(err)
@@ -249,7 +251,7 @@ func (p *ServiceNowPlugin) checkChange(change change_type) string {
     if time.Time.Now() < startDateTime ||
 	   time.Time.Now() > endDateTime {
 		errorText = fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s ",
-	                             change.Number, change.ShortDescription, change.StartDate, change.EndDate)
+	                             changeNumber, changeShortDescription, startDateString, endDateString)
 		p.Logger.Debug(errorText)
 	}
 
