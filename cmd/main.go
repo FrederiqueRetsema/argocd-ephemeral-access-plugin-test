@@ -234,7 +234,7 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 
 	errorText := ""
 	var remainingTime time.Duration
-	_ = remainingTime.UnmarshalText([]byte("0h0m0s"))
+	_ = remainingTime.Unmarshal([]byte("0h0m0s"))
 
 	changeNumber := change.Number
 	changeShortDescription := change.ShortDescription
@@ -276,6 +276,11 @@ func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, err
 func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
 	p.Logger.Debug("This is a call to the GrantAccess method")
 
+	changeNumber := ""
+	changeType := ""
+	changeShortDuration := ""
+	changeEndDate := ""
+
 	snowUrl = os.Getenv("SERVICE_NOW_URL")
 	if snowUrl == "" {
 		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
@@ -304,7 +309,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	changes := p.getChanges(username, password, ciName)
 	validChange := false
 	errorString = ""
-	var changeRemainingTime Duration 
+	var changeRemainingTime time.Duration 
 	for _, change := range changes {
 		errorString, remainingTime := p.checkChange(change)
 		if errorString == "" {
@@ -335,7 +340,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusGranted,
 		// The message can be returned as markdown
-		Message: fmt.Sprint("Granted access: change __%s__ (%s), until __%s__", changeNumber, changeShortDescription, changeEndDate)
+		Message: fmt.Sprint("Granted access: change __%s__ (%s), until __%s__", changeNumber, changeShortDescription, changeEndDate),
 	}, nil
 }
 
