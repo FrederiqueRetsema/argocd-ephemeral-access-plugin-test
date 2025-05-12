@@ -296,15 +296,19 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 
 	changes := p.getChanges(username, password, ciName)
+	validChange := false
 	for _, change := range changes {
 		errorString = p.checkChange(change)
 		if errorString != "" {
 			p.Logger.Error("Access Denied for "+ar.Spec.Subject.Username+" : "+errorString)
-			return p.DenyAccess(errorString)
-		}
-		else {
+		} else {
+			validChange = true
 			break
 		}
+	}
+	
+	if !validChange {
+		return p.DenyAccess(errorString)
 	}
 	
 	// Set duration to 5 minutes
