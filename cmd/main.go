@@ -262,8 +262,6 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 		remainingTime = endDateTime.Sub(time.Now())
 	}
 
-	p.Logger.Debug(changeType)
-
 	return errorText, remainingTime
 }
 
@@ -327,7 +325,8 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 	
 	if validChange {
-		p.Logger.Info(fmt.Sprintf("Granted access for %s: %s change %s (%s)", requesterName, changeType, changeNumber, changeShortDescription))
+    	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s)", requesterName, changeType, changeNumber, changeShortDescription)
+		p.Logger.Info(grantedAccessText)
 	} else {
 		p.Logger.Error("Access Denied for "+requesterName+" : "+errorString)
 		return p.DenyAccess(errorString)
@@ -338,10 +337,12 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	jsonAr, _ := json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
 
+	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s__", changeNumber, changeShortDescription, changeEndDate)
+	p.Logger.Debug(grantedAccessTextUI)
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusGranted,
 		// The message can be returned as markdown
-		Message: fmt.Sprint("Granted access: change __%s__ (%s), until __%s__", changeNumber, changeShortDescription, changeEndDate),
+		Message: fmt.Sprintf(grantedAccessTextUI),
 	}, nil
 }
 
