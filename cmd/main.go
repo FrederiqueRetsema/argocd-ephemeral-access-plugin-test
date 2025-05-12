@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"encoding/json"
@@ -229,18 +230,29 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
 func (p *ServiceNowPlugin) checkChange(change change_type) string {
 //	type,number,short_description,start_date,end_date", snowUrl, ciName)
 	errorText := ""
+	changeNumber := change.Number
 	changeType := change.Type
-	var startDate time
-	err := startDate.UnmarshalText([]byte(change.StartDate))
+
+    startDateString := strings.Replace(change.StartDate," ","T",-1)+"Z"
+	var startDateTime time.Time
+	err := startDateTime.UnmarshalText([]byte(startDate))
 	if err != nil {
 		p.Logger.Debug(err)
 	}
-	endDate := endDate.Unmarchal([]byte(change.EndDate))
+
+	endDateString := strings.Replace(change.EndDate," ","T",-1)+"Z"
+	err := endDateTime.Unmarchal([]byte(endDateString))
 	if err != nil {
 		p.Logger.Debug(err)
 	}
-	p.Logger.Debug(fmt.Sprintf("%d", startDate))
-	p.Logger.Debug(fmt.Sprintf("%d", endDate))
+
+    if time.Time.Now() < startDateTime ||
+	   time.Time.Now() > endDateTime {
+		errorText = fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s ",
+	                             change.Number, change.ShortDescription, change.StartDate, change.EndDate)
+		p.Logger.Debug(errorText)
+	}
+
 	p.Logger.Debug(changeType)
 
 	return errorText
