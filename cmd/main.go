@@ -207,43 +207,6 @@ func (p *ServiceNowPlugin) getChange(username string, password string, ciName st
 	return changeResults.Result[0]
 }
 
-func (p *ServiceNowPlugin) getChange(username string, password string, ciName string) change_type {
-	url := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
-	p.Logger.Debug("Call to: " + url)
-
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		p.Logger.Error("Error in NewRequest: " + err.Error())
-	}
-
-	req.Header.Add("Accept", "application/json")
-	req.SetBasicAuth(username, password)
-	resp, err := client.Do(req)
-	if err != nil {
-		p.Logger.Error("Error in client.Do: " + err.Error())
-	}
-
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		p.Logger.Error("Error in io.ReadAll: " + err.Error())
-	}
-
-	p.Logger.Debug(string(body))
-
-	var cmdbResults cmdb_results_type
-	err = json.Unmarshal(body, &cmdbResults)
-	if err != nil {
-		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
-	}
-
-	p.Logger.Debug("InstallStatus: "+cmdbResults.Result[0].InstallStatus+", CI name: "+cmdbResults.Result[0].Name)
-
-	return cmdbResults.Result[0]
-}
-
 func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
 	errorText := ""
 	installStatus := CI.InstallStatus
