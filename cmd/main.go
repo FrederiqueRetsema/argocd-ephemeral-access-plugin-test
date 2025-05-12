@@ -69,7 +69,7 @@ func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Applic
 	application := ar.Spec.Application.Name
 	duration := ar.Spec.Duration.Duration.String()
 
-	infoText := fmt.Sprintf("GrantAccess: username: %s, role: %s, application: [%s]%s, duration: %s", username, role, namespace, application, duration)
+	infoText := fmt.Sprintf("Call to GrantAccess: username: %s, role: %s, application: [%s]%s, duration: %s", username, role, namespace, application, duration)
 	p.Logger.Info(infoText)
 
 	jsonAr, _ := json.Marshal(ar)
@@ -212,7 +212,7 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
 	installStatus := CI.InstallStatus
 	ciName := CI.Name
 
-	validInstallStatus = []string {
+	validInstallStatus := []string {
 		"1",            // Installed
 		"3",			// In maintenance
 		"4", 			// Pending install
@@ -221,6 +221,23 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
 
 	if !slices.Contains(validInstallStatus, installStatus) {
 		errorText = fmt.Sprintf("Invalid install status (%s) for CI %s", installStatus, ciName)
+	}
+
+	return errorText
+}
+
+func (p *ServiceNowPlugin) checkChange(change change_type) string {
+//	type,number,short_description,start_date,end_date", snowUrl, ciName)
+	errorText := ""
+	type := change.Type
+	var startDate time
+	err := startDate.UnmarshalText([]byte(change.StartDate))
+	if err != nil {
+		p.Logger.Debug(err)
+	}
+	endDate := endDate.Unmarchal([]byte(change.EndDate))
+	if err != nil {
+		p.Logger.Debug(err)
 	}
 
 	return errorText
@@ -259,6 +276,13 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		return p.DenyAccess(errorString)
 	}
 
+	change := p.getChange(username, password, ciName)
+	errorString := p.checkChange(change)
+	if errorString != "" {
+		p.Logger.Error("Access Denied for "+ar.Spec.Subject.Username+" : "+errorString)
+		return p.DenyAccess(errorString)
+	}
+	
 	// Set duration to 5 minutes
 	ar.Spec.Duration.Duration = 5 * time.Minute
 	jsonAr, _ := json.Marshal(ar)
@@ -267,7 +291,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusGranted,
 		// The message can be returned as markdown
-		Message: "Granted access by the Topdesk plugin",
+		Message: "Granted access by the ServiceNow plugin",
 	}, nil
 }
 
@@ -279,7 +303,7 @@ func (p *ServiceNowPlugin) RevokeAccess(ar *api.AccessRequest, app *argocd.Appli
 	return &plugin.RevokeResponse{
 		Status: plugin.RevokeStatusRevoked,
 		// The message can be returned as markdown
-		Message: "Revoked access by the Topdesk plugin",
+		Message: "Revoked access by the ServiceNow plugin",
 	}, nil
 }
 
