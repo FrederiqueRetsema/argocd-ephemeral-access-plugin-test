@@ -227,12 +227,14 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
 	return errorText
 }
 
-func (p *ServiceNowPlugin) checkChange(change change_type) string {
+func (p *ServiceNowPlugin) checkChange(change change_type) (string, Duration) {
 //	type,number,short_description,start_date,end_date", snowUrl, ciName)
 	var startDateTime time.Time
 	var endDateTime time.Time
 
 	errorText := ""
+	var diff Duration
+	_ = diff.UnmarshalText([]byte("0h0m0s"))
 
 	changeNumber := change.Number
 	changeShortDescription := change.ShortDescription
@@ -248,18 +250,20 @@ func (p *ServiceNowPlugin) checkChange(change change_type) string {
 	err = endDateTime.UnmarshalText([]byte(endDateString))
 	if err != nil {
 		p.Logger.Debug(err.Error())
-	}
+	} 
 
     if endDateTime.Before(time.Now()) ||
 	   startDateTime.After(time.Now()) {
 		errorText = fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s ",
 	                             changeNumber, changeShortDescription, startDateString, endDateString)
 		p.Logger.Debug(errorText)
+	} else {
+		diff = endDateTime.Sub(time.Now())
 	}
 
 	p.Logger.Debug(changeType)
 
-	return errorText
+	return errorText, diff
 }
 
 func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
@@ -299,23 +303,30 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 	changes := p.getChanges(username, password, ciName)
 	validChange := false
+	errorString = ""
 	for _, change := range changes {
-		errorString = p.checkChange(change)
-		if errorString != "" {
-			p.Logger.Error("Access Denied for "+requesterName+" : "+errorString)
-		} else {
+		errorString, diff = p.checkChange(change)
+		if errorString == "" {
 			validChange = true
+
+			changeNumber = change.Number
+			changeType = change.Type
+			changeShortDescription = change.ShortDescription
+
 			break
 		}
 	}
 	
-	if !validChange {
+	if validChange {
+		p.Logger.Info(fmt.Sprint("Granted access for %s: %s change %s (%s)", requesterName, changeType, changeNumber, changeShortDescription))
+	} else {
+		p.Logger.Error("Access Denied for "+requesterName+" : "+errorString)
 		return p.DenyAccess(errorString)
-	}
-	p.Logger.Info(fmt.Sprint("Granted access for %s: change %s (%s)", requesterName, changeNumber, changeShortDescription)
+	} 
+
 	
 	// Set duration to 5 minutes
-	ar.Spec.Duration.Duration = 5 * time.Minute
+	ar.Spec.Duration.Duration = endDateTime
 	jsonAr, _ := json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
 
