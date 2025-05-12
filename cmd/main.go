@@ -277,6 +277,8 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
 	}
 
+	requesterName := ar.Spec.Subject.Username
+
 	username, password := p.getSNOWCredentials()
 
 	p.showRequest(ar, app)
@@ -291,7 +293,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	CI := p.getCI(username, password, ciName)
 	errorString := p.checkCI(CI)
 	if errorString != "" {
-		p.Logger.Error("Access Denied for "+ar.Spec.Subject.Username+" : "+errorString)
+		p.Logger.Error("Access Denied for "+requesterName+" : "+errorString)
 		return p.DenyAccess(errorString)
 	}
 
@@ -300,7 +302,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	for _, change := range changes {
 		errorString = p.checkChange(change)
 		if errorString != "" {
-			p.Logger.Error("Access Denied for "+ar.Spec.Subject.Username+" : "+errorString)
+			p.Logger.Error("Access Denied for "+requesterName+" : "+errorString)
 		} else {
 			validChange = true
 			break
@@ -310,6 +312,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	if !validChange {
 		return p.DenyAccess(errorString)
 	}
+	p.Logger.Info(fmt.Sprint("Granted access for %s: change %s (%s)", requesterName, changeNumber, changeShortDescription)
 	
 	// Set duration to 5 minutes
 	ar.Spec.Duration.Duration = 5 * time.Minute
