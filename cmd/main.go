@@ -24,16 +24,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type TopdeskPlugin struct {
+type ServiceNowPlugin struct {
 	Logger hclog.Logger
 }
 
-func (p *TopdeskPlugin) Init() error {
+func (p *ServiceNowPlugin) Init() error {
 	p.Logger.Debug("This is a call to the Init method")
 	return nil
 }
 
-func (p *TopdeskPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
+func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
 	username := ar.Spec.Subject.Username
 	role := ar.Spec.Role.TemplateRef.Name
 	namespace := ar.Spec.Application.Namespace
@@ -49,7 +49,7 @@ func (p *TopdeskPlugin) showRequest(ar *api.AccessRequest, app *argocd.Applicati
 	p.Logger.Debug("jsonApp: " + string(jsonApp))
 }
 
-func (p *TopdeskPlugin) getCIName(app *argocd.Application) (string, string) {
+func (p *ServiceNowPlugin) getCIName(app *argocd.Application) (string, string) {
 	ciLabel := os.Getenv("CI_LABEL")
 	if ciLabel == "" {
 		p.Logger.Debug("No CI_LABEL environment variable, assuming ci_name")
@@ -63,7 +63,7 @@ func (p *TopdeskPlugin) getCIName(app *argocd.Application) (string, string) {
 	return ciLabel, string(ciName)
 }
 
-func (p *TopdeskPlugin) getSNOWCredentials() (string, string) {
+func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 	secretName := os.Getenv("SNOW_SECRET_NAME")
 	if secretName == "" {
 		p.Logger.Debug("No SNOW_SECRET_NAME environment variable, assuming snow-secret")
@@ -93,18 +93,13 @@ func (p *TopdeskPlugin) getSNOWCredentials() (string, string) {
 	return string(secret.Data["username"]), string(secret.Data["password"])
 }
 
-func (p *TopdeskPlugin) getCI(username string, password string, ciName string) string {
+func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) string {
 	snowUrl := os.Getenv("SERVICE_NOW_URL")
 	if snowUrl == "" {
 		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
 	}
 
-	cmdbClassName := os.Getenv("CMDB_CLASS_NAME")
-	if cmdbClassName == "" {
-		p.Logger.Debug("No CMDB Class Name (environment variable CMDB_CLASS_NAME is empty), assuming u_cmdb_ci_kubernetes_application")
-		cmdbClassName = "u_cmdb_ci_kubernetes_application"
-	}
-	url := fmt.Sprintf("%s/api/now/cmdb/instance/%s?sysparm_query=name=%s", snowUrl, cmdbClassName, ciName)
+	url := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=operational_status,install_status,name", snowUrl, ciName)
 	p.Logger.Debug("Call to: " + url)
 
 	client := &http.Client{}
@@ -112,6 +107,7 @@ func (p *TopdeskPlugin) getCI(username string, password string, ciName string) s
 	if err != nil {
 		p.Logger.Error("Error in NewRequest: " + err.Error())
 	}
+
 	req.Header.Add("Accept", "application/json")
 	req.SetBasicAuth(username, password)
 	resp, err := client.Do(req)
@@ -121,11 +117,14 @@ func (p *TopdeskPlugin) getCI(username string, password string, ciName string) s
 
 	defer resp.Body.Close()
 
-	type s struct {
-		result ([]struct {
-			sys_id string
-			name   string
-		})
+	type cmdb_type *struct {
+		OperationalStatus string `json:"operational_status"`
+		InstallStatus string `json:"install_status"`
+		Name string `json:"name"`
+	}
+
+	type cmdb_results_type *struct {
+		Result []cmdb_type `json:"result"` 
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -135,26 +134,25 @@ func (p *TopdeskPlugin) getCI(username string, password string, ciName string) s
 
 	p.Logger.Debug(string(body))
 
-	var jsonData s
-	err = json.Unmarshal(body, &jsonData)
+	var cmdbResults cmdb_results_type
+	err = json.Unmarshal(body, &cmdbResults)
 	if err != nil {
 		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
 	}
 
-	sys_id := jsonData.result[0].sys_id
-	p.Logger.Debug("sys_id: " + fmt.Sprint(len(jsonData.result)) + " - " + sys_id)
+	p.Logger.Debug("OperationalStatus: "+cmdbResults.Result[0].OperationalStatus+", InstallStatus: "+cmdbResults.Result[0].InstallStatus+", "+cmdbResults.Result[0].Name)
 
 	return ""
 }
 
-func (p *TopdeskPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
+func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
 	return &plugin.GrantResponse{
 		Status:  plugin.GrantStatusDenied,
 		Message: reason,
 	}, nil
 }
 
-func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
+func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
 	p.Logger.Debug("This is a call to the GrantAccess method")
 
 	username, password := p.getSNOWCredentials()
@@ -187,7 +185,7 @@ func (p *TopdeskPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applicati
 // RevokeAccess is the method that will be called by the EphemeralAccess controller
 // when an AccessRequest is expired. Plugins authors may decide to not implement this
 // method depending on the use case. In this case it is safe to just return nil, nil.
-func (p *TopdeskPlugin) RevokeAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.RevokeResponse, error) {
+func (p *ServiceNowPlugin) RevokeAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.RevokeResponse, error) {
 	p.Logger.Info("This is a call to the RevokeAccess method")
 	return &plugin.RevokeResponse{
 		Status: plugin.RevokeStatusRevoked,
@@ -209,7 +207,7 @@ func main() {
 	// create a new instance of your plugin after initializing the logger and other
 	// dependencies. However it is preferable to leave the main function lean and
 	// initialize plugin dependencies in the `Init` method.
-	p := &TopdeskPlugin{
+	p := &ServiceNowPlugin{
 		Logger: logger,
 	}
 
