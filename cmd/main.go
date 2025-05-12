@@ -170,10 +170,6 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 }
 
 func (p *ServiceNowPlugin) getChange(username string, password string, ciName string) change_type {
-	if snowUrl == "" {
-		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
-	}
-
 	url := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date", snowUrl, ciName)
 	p.Logger.Debug("Call to: " + url)
 
@@ -212,10 +208,6 @@ func (p *ServiceNowPlugin) getChange(username string, password string, ciName st
 }
 
 func (p *ServiceNowPlugin) getChange(username string, password string, ciName string) change_type {
-	if snowUrl == "" {
-		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
-	}
-
 	url := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
 	p.Logger.Debug("Call to: " + url)
 
@@ -282,6 +274,10 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	p.Logger.Debug("This is a call to the GrantAccess method")
 
 	snowUrl = os.Getenv("SERVICE_NOW_URL")
+	if snowUrl == "" {
+		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
+	}
+
 	username, password := p.getSNOWCredentials()
 
 	p.showRequest(ar, app)
