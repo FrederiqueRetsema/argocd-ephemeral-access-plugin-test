@@ -336,7 +336,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	jsonAr, _ := json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
 
-	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, changeEndDate, string(changeRemainingTime))
+	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, changeEndDate, changeRemainingTime.String())
 	p.Logger.Debug(grantedAccessTextUI)
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusGranted,
