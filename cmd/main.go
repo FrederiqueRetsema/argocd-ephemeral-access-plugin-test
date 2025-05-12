@@ -296,7 +296,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 
 	change := p.getChange(username, password, ciName)
-	errorString := p.checkChange(change)
+	errorString date= p.checkChange(change)
 	if errorString != "" {
 		p.Logger.Error("Access Denied for "+ar.Spec.Subject.Username+" : "+errorString)
 		return p.DenyAccess(errorString)
