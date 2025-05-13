@@ -358,21 +358,24 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
         },
         Spec: batchv1.CronJobSpec{
 			Schedule: fmt.Sprintf("%d %d %d %d *", jobStartTime.Minute(), jobStartTime.Hour(), jobStartTime.Day(), jobStartTime.Month()),
-			ConcurrencyPolicy: v1.ForbidConcurrent,
-			Template: v1.PodTemplateSpec{
-				Spec: v1.PodSpec{
-					ServiceAccountName: "remove-accessrequest-job-sa",
-					Containers: []v1.Container{
-						{
-							Name:    jobName,
-							Image:   "curlimages/curl:latest",
-							Command: strings.Split(cmd, " "),
-						},
-					},
-					RestartPolicy: v1.RestartPolicyNever,
+			JobTemplate: batchv1.JobTemplateSpec{
+				JobSpec: batchv1.Spec{
+					Template: v1.PodTemplateSpec{
+						Spec: v1.PodSpec{
+							ServiceAccountName: "remove-accessrequest-job-sa",
+							Containers: []v1.Container{
+								{
+									Name:    jobName,
+									Image:   "curlimages/curl:latest",
+									Command: strings.Split(cmd, " "),
+								},
+							},
+							RestartPolicy: v1.RestartPolicyNever,
+						}
+					}
+	  			    BackoffLimit: &backOffLimit,
 				},
 			},
-			BackoffLimit: &backOffLimit,
 		},
 	}
 
@@ -461,7 +464,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	if arDuration > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
 		endLocalDateString = p.getLocalTime(validChange.EndDate)
-		p.createAbortJob(namespace, arName)
+		p.createAbortJob(namespace, arName, validChange.EndDate)
 	} else {
 		changeRemainingTime = arDuration
 
