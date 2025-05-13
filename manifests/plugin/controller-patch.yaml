@@ -24,6 +24,8 @@ spec:
               value: CHANGE_THIS_WITH_THE_SNOW_SECRET_NAME
             - name: SERVICE_NOW_URL
               value: CHANGE_THIS_TO_POINT_TO_YOUR_SNOW_URL
+            - name: TIMEZONE
+              value: Europe/Amsterdam
             - name: SECRET_NAMESPACE
               value: argocd-ephemeral-access
             - name: EPHEMERAL_PLUGIN_PATH

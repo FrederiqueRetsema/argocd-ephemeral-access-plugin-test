@@ -353,25 +353,35 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	
 	// Set duration to the time left for this (valid) change, unless original request was
 	// shorter (otherwise the ephemeral access extension itself will abort the accessrequest)
-	var grantedAccessTextUI string
+	var endLocalDateString string
 	if ar.Spec.Duration.Duration > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
+
+		var endDateTime time.Time
+		endDateString := strings.Replace(changeEndDate," ","T",-1)+"Z"
+		_ = endDateTime.UnmarshalText([]byte(endDateString))
+		loc, _ := time.LoadLocation(timezone)
+		endLocalDateString = fmt.Sprintf("%02d:%02d:%02d", 
+										endDateTime.In(loc).Hour(),
+										endDateTime.In(loc).Minute(),
+										endDateTime.In(loc).Second())
 	} else {
 		changeRemainingTime = ar.Spec.Duration.Duration
-	}
 
-	var endDateTime time.Time
-	endDateString := strings.Replace(changeEndDate," ","T",-1)+"Z"
-	_ = endDateTime.UnmarshalText([]byte(endDateString))
-	loc, _ := time.LoadLocation(timezone)
-	endLocalDateString := fmt.Sprintf("%02d:%02d:%02d", 
-	                                  endDateTime.In(loc).Hour(),
-				   				      endDateTime.In(loc).Minute(),
-							          endDateTime.In(loc).Second())
+		var endDateTime time.Time
+        var timezone = "Europe/Amsterdam"
+		var dur time.Duration = time.Hour*4 
+		var endDateTime time.Time = time.Now().Add(dur)
+		loc, _ := time.LoadLocation(timezone)
+		endLocalDateString = fmt.Sprintf("%02d:%02d:%02d", 
+										endDateTime.In(loc).Hour(),
+										endDateTime.In(loc).Minute(),
+										endDateTime.In(loc).Second())
+	}
 
 	jsonAr, _ := json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
-	grantedAccessTextUI = fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, endLocalDateString, changeRemainingTime.Truncate(time.Second).String())
+	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, endLocalDateString, changeRemainingTime.Truncate(time.Second).String())
 
 	p.Logger.Debug(grantedAccessTextUI)
 	return &plugin.GrantResponse{
