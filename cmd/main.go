@@ -322,7 +322,7 @@ func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
 }
 
 // https://dev.to/narasimha1997/create-kubernetes-jobs-in-golang-using-k8s-client-go-api-59ej
-func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName string, jobStartTime time) {
+func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName string, jobStartTime time.Time) {
 	p.Logger.Debug(fmt.Sprintf("createAbortJob: %s, %s", namespace, accessrequestName))
 	jobName := strings.Replace("stop-"+accessrequestName,".","-",-1)
 	cmd := fmt.Sprintf("curl --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt --header \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" -X DELETE https://kubernetes.default.svc.cluster.local/apis/ephemeral-access.argoproj-labs.io/v1alpha1/namespaces/argocd/accessrequests/%s", accessrequestName)
@@ -359,7 +359,7 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
         Spec: batchv1.CronJobSpec{
 			Schedule: fmt.Sprintf("%d %d %d %d *", jobStartTime.Minute(), jobStartTime.Hour(), jobStartTime.Day(), jobStartTime.Month()),
 			JobTemplate: batchv1.JobTemplateSpec{
-				JobSpec: batchv1.Spec{
+				Spec: batchv1.JobSpec{
 					Template: v1.PodTemplateSpec{
 						Spec: v1.PodSpec{
 							ServiceAccountName: "remove-accessrequest-job-sa",
