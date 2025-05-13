@@ -325,6 +325,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 				changeShortDescription = change.ShortDescription
 				changeRemainingTime = remainingTime
 				changeEndDate = change.EndDate
+				requestedRole := ar.Spec.Role.TemplateRef.Name
 
 				break
 			}
@@ -336,12 +337,11 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		}
 	}
 	
-	p.Logger.Debug("errorString-3: "+errorString)
 	if validChange {
-    	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s)", requesterName, changeType, changeNumber, changeShortDescription)
+    	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s", requesterName, changeType, changeNumber, changeShortDescription, requestedRole)
 		p.Logger.Info(grantedAccessText)
 	} else {
-		p.Logger.Error("Access Denied for "+requesterName+" : "+errorString)
+		p.Logger.Error(fmt.Sprintf("Access Denied for %s, role %s: %s", requesterName, requestedRole, errorString)
 		return p.DenyAccess(errorString)
 	} 
 	
