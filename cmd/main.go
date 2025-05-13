@@ -357,7 +357,7 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
     if err != nil {
         p.Logger.Error(fmt.Sprintf("Failed to create K8s job %s in namespace %s.", jobName, namespace))
     } else {
-	    p.Logger.Info(fmt.Sprintf("Created K8s job %s successfully in namespace %s", jobName, namespace)
+	    p.Logger.Info(fmt.Sprintf("Created K8s job %s successfully in namespace %s", jobName, namespace))
 	}
 }
 
