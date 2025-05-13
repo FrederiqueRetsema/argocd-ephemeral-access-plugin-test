@@ -435,8 +435,10 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	var endLocalDateString string
 
 	arDurationString := arDuration.String()
-	var arDurationTime time.Duration
-	arDurationTime, err = time.ParseDuration(arDurationString)
+	arDurationTime, err := time.ParseDuration(arDurationString)
+	if err != nil {
+		fmt.Logger("ParseDuration error: "+err.Error())
+	}
 	p.Logger.Debug(fmt.Sprintf("arDurationString: %s, arDurationTime: %s", arDurationString, arDurationTime.String()))
 
 	if arDurationTime > changeRemainingTime {  
