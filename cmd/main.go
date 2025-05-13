@@ -290,6 +290,12 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
 	}
 
+	timezone = os.Getenv("TIMEZONE")
+	if timezone == "" {
+		p.Logger.Info("No timezone given (environment variable TIMEZONE is empty), assuming UTC"))
+		timezone = UTC
+	}
+
 	requesterName := ar.Spec.Subject.Username
 
 	username, password := p.getSNOWCredentials()
@@ -337,7 +343,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		}
 	}
 	
-	if validChange {
+	if validChange {		
     	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s", requesterName, changeType, changeNumber, changeShortDescription, requestedRole)
 		p.Logger.Info(grantedAccessText)
 	} else {
@@ -350,13 +356,21 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	var grantedAccessTextUI string
 	if ar.Spec.Duration.Duration > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
-		jsonAr, _ := json.Marshal(ar)
-		p.Logger.Debug(string(jsonAr))
-   	    grantedAccessTextUI = fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, changeEndDate, changeRemainingTime.Truncate(time.Second).String())
 	} else {
 		changeRemainingTime = ar.Spec.Duration.Duration
-		grantedAccessTextUI = fmt.Sprintf("Granted access: change __%s__ (%s), for %s__", changeNumber, changeShortDescription, changeRemainingTime.Truncate(time.Second).String())
 	}
+
+	var endDateTime time.Time
+	err = endDateTime.UnmarshalText([]byte(changeEndDateString))
+	loc, _ := time.LoadLocation(timezone)
+	endLocalDateString := fmt.Sprintf("%d:%d:%d", 
+	                                  endDateTime.In(loc).Hour(),
+				   				      endDateTime.In(loc).Minute(),
+							          endDateTime.In(loc).Second())
+
+	jsonAr, _ := json.Marshal(ar)
+	p.Logger.Debug(string(jsonAr))
+	grantedAccessTextUI = fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, endLocalDateString, changeRemainingTime.Truncate(time.Second).String())
 
 	p.Logger.Debug(grantedAccessTextUI)
 	return &plugin.GrantResponse{
