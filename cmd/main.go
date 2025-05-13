@@ -368,10 +368,8 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	} else {
 		changeRemainingTime = ar.Spec.Duration.Duration
 
-		var endDateTime time.Time
         var timezone = "Europe/Amsterdam"
-		var dur time.Duration = time.Hour*4 
-		var endDateTime time.Time = time.Now().Add(dur)
+		var endDateTime time.Time = time.Now().Add(changeRemainingTime)
 		loc, _ := time.LoadLocation(timezone)
 		endLocalDateString = fmt.Sprintf("%02d:%02d:%02d", 
 										endDateTime.In(loc).Hour(),
