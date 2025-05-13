@@ -327,14 +327,17 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 				break
 			}
+			p.Logger.Debug("errorString-1: "+errorString)
 		}
 		if validChange || len(changes) < sysparm_limit {
+			p.Logger.Debug("errorString-2: "+errorString)
 			break
 		} else {
 			changes, sysparm_offset = p.getChanges(username, password, ciName, sysparm_offset)
 		}
 	}
 	
+	p.Logger.Debug("errorString-3: "+errorString)
 	if validChange {
     	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s)", requesterName, changeType, changeNumber, changeShortDescription)
 		p.Logger.Info(grantedAccessText)
