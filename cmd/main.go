@@ -315,7 +315,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	errorString = ""
 	for true {
 		for _, change := range changes {
-			errorString, remainingTime := p.checkChange(change)
+			errorString, remainingTime = p.checkChange(change)
 			if errorString == "" {
 				validChange = true
 
