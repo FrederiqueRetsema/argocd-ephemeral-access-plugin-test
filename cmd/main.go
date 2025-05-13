@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,7 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/clientcmd"
 
 	argocd "github.com/argoproj-labs/argocd-ephemeral-access/api/argoproj/v1alpha1"
 	api "github.com/argoproj-labs/argocd-ephemeral-access/api/ephemeral-access/v1alpha1"
@@ -24,6 +26,8 @@ import (
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/plugin"
 	goPlugin "github.com/hashicorp/go-plugin"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 type ServiceNowPlugin struct {
@@ -77,6 +81,8 @@ func (p *ServiceNowPlugin) Init() error {
 const sysparm_limit = 5
 var snowUrl string
 var timezone string
+var k8sconfig *Config
+var k8sclientset *Clientset
 
 func (p *ServiceNowPlugin) getSnowUrl() {
 	snowUrl = os.Getenv("SERVICE_NOW_URL")
@@ -91,6 +97,21 @@ func (p *ServiceNowPlugin) getTimezone() {
 		p.Logger.Info("No timezone given (environment variable TIMEZONE is empty), assuming UTC")
 		timezone = "UTC"
 	}
+}
+
+func (p *ServiceNowPlugin) getK8sConfig() (*Config, *Clientset) {
+	var err error.Error
+	k8sconfig, err = rest.InClusterConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	k8sclientset, err = kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return k8sconfig, k8sclientset
 }
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
@@ -141,16 +162,6 @@ func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 	}
 
 	p.Logger.Debug("Get credentials from secret " + secretName + "...")
-
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
 
 	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 	if err != nil {
@@ -314,38 +325,41 @@ func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
 						t.In(loc).Second())
 }
 
-func (p *ServiceNowPlugin) createAbortJob() () {
-	namespace := os.Getenv("SECRET_NAMESPACE")
-	if namespace == "" {
-		p.Logger.Debug("No SECRET_NAMESPACE environment variable, assuming argocd-ephemeral-access")
-		namespace = "argocd-ephemeral-access"
+// https://dev.to/narasimha1997/create-kubernetes-jobs-in-golang-using-k8s-client-go-api-59ej
+func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName string) {
+	jobName := "stop-"+accessrequestName
+	cmd := fmt.Sprintf("curl --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt --header \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" -X DELETE https://kubernetes.default.svc.cluster.local/apis/ephemeral-access.argoproj-labs.io/v1alpha1/namespaces/argocd/accessrequests/%s", accessrequestName)
+	jobs := k8sclientset.BatchV1().Jobs(namespace)
+    var backOffLimit int32 = 0
+
+    jobSpec := &batchv1.Job{
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      jobName,
+            Namespace: namespace,
+        },
+        Spec: batchv1.JobSpec{
+            Template: v1.PodTemplateSpec{
+                Spec: v1.PodSpec{
+                    Containers: []v1.Container{
+                        {
+                            Name:    jobName,
+                            Image:   "curlimages/curl:latest",
+                            Command: strings.Split(*cmd, " "),
+                        },
+                    },
+                    RestartPolicy: v1.RestartPolicyNever,
+                },
+            },
+            BackoffLimit: &backOffLimit,
+        },
+    }
+
+    _, err := jobs.Create(context.TODO(), jobSpec, metav1.CreateOptions{})
+    if err != nil {
+        p.Logger.Error(fmt.Sprintf("Failed to create K8s job %s in namespace %s.", jobName, namespace))
+    } else {
+	    p.Logger.Info(fmt.Sprintf("Created K8s job %s successfully in namespace %s", jobName, namespace)
 	}
-
-	secretName := os.Getenv("SNOW_SECRET_NAME")
-	if secretName == "" {
-		p.Logger.Debug("No SNOW_SECRET_NAME environment variable, assuming snow-secret")
-		secretName = "snow-secret"
-	}
-
-	p.Logger.Debug("Get credentials from secret " + secretName + "...")
-
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
-	if err != nil {
-		p.Logger.Error(fmt.Sprintf("Error getting secret %s, Does secret exist in namespace %s?", secretName, namespace))
-		panic(err.Error())
-	}
-
-	return string(secret.Data["username"]), string(secret.Data["password"])
 }
 
 func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
@@ -355,11 +369,14 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	requesterName := ar.Spec.Subject.Username
 	requestedRole := ar.Spec.Role.TemplateRef.Name
 	namespace := ar.Spec.Application.Namespace
+	arName := ar.Metadata.Name
+	arDuration := ar.Spec.Duration
 
 	sysparm_offset := 0 
 
 	snowUrl = p.getSnowUrl()
 	timezone = p.getTimezone()
+	k8sconfig, k8sclientset = p.getK8sConfig()
 
 	username, password := p.getSNOWCredentials()
 
@@ -416,11 +433,12 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	// Set duration to the time left for this (valid) change, unless original request was
 	// shorter (otherwise the ephemeral access extension itself will abort the accessrequest)
 	var endLocalDateString string
-	if ar.Spec.Duration.Duration > changeRemainingTime {  
+	if arDuration > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
 		endLocalDateString = p.getLocalTime(validChange.EndDate)
+		p.createAbortJob(namespace, arName)
 	} else {
-		changeRemainingTime = ar.Spec.Duration.Duration
+		changeRemainingTime = arDuration
 
 		var endDateTime time.Time = time.Now().Add(changeRemainingTime)
 		endLocalDateString = p.getLocalTime(endDateTime)
