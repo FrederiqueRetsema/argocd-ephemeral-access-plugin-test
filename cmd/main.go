@@ -435,7 +435,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 	arDurationString := arDuration.String()
 	var arDurationTime time.Duration
-	arDurationTime.UnmarchalText([]byte(arDurationString))
+	arDurationTime.UnmarshalText([]byte(arDurationString))
 
 	if arDurationTime > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
