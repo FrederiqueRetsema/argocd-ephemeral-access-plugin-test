@@ -61,7 +61,7 @@ func (p *ServiceNowPlugin) Init() error {
 	return nil
 }
 
-const sysparm_limit = 1
+const sysparm_limit = 2
 var snowUrl string
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
@@ -258,7 +258,7 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
     if endDateTime.Before(time.Now()) ||
 	   startDateTime.After(time.Now()) {
 		currentTimeString, _ := time.Now().MarshalText()
-		errorText = fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s (current time: %s)",
+		errorText = fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s (current date: %s)",
 	                             changeNumber, changeShortDescription, startDateString, endDateString, currentTimeString)
 		p.Logger.Debug(errorText)
 	} else {
@@ -328,10 +328,8 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 				break
 			}
-			p.Logger.Debug("errorString-1: "+errorString)
 		}
 		if validChange || len(changes) < sysparm_limit {
-			p.Logger.Debug("errorString-2: "+errorString)
 			break
 		} else {
 			changes, sysparm_offset = p.getChanges(username, password, ciName, sysparm_offset)
