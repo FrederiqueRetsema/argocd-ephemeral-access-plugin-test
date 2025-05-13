@@ -148,7 +148,7 @@ func (p *ServiceNowPlugin) getFromSNOWAPI(username string, password string, apiC
 	p.Logger.Debug("apiCall: " + apiCall)
 
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", apiCall, nil)
 	if err != nil {
 		p.Logger.Error("Error in NewRequest: " + err.Error())
 	}
@@ -175,10 +175,10 @@ func (p *ServiceNowPlugin) getFromSNOWAPI(username string, password string, apiC
 func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) cmdb_snow_type {
 
 	apiCall := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
-	response := p.getFromSNOWAPI(apiCall)
+	response := p.getFromSNOWAPI(username, password, apiCall)
 
 	var cmdbResults cmdb_results_snow_type
-	err = json.Unmarshal(response, &cmdbResults)
+	err := json.Unmarshal(response, &cmdbResults)
 	if err != nil {
 		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
 	}
@@ -191,10 +191,10 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) ([]*change_snow_type, int) {
 
 	apiCall := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=%d&sysparm_offset=%d", snowUrl, ciName, sysparm_limit, sysparm_offset)
-	response := p.getFromSNOWAPI(apiCall)
+	response := p.getFromSNOWAPI(username, password, apiCall)
 
 	var changeResults change_results_snow_type
-	err = json.Unmarshal(body, &changeResults)
+	err := json.Unmarshal(response, &changeResults)
 	if err != nil {
 		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
 	}
