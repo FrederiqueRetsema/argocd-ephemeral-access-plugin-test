@@ -340,7 +340,7 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
                         {
                             Name:    jobName,
                             Image:   "curlimages/curl:latest",
-                            Command: strings.Split(*cmd, " "),
+                            Command: strings.Split(cmd, " "),
                         },
                     },
                     RestartPolicy: v1.RestartPolicyNever,
@@ -365,7 +365,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	requesterName := ar.Spec.Subject.Username
 	requestedRole := ar.Spec.Role.TemplateRef.Name
 	namespace := ar.Spec.Application.Namespace
-	arName := ar.Metadata.Name
+	arName := ar.MetaData.Name
 	arDuration := ar.Spec.Duration
 
 	sysparm_offset := 0 
@@ -429,12 +429,12 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	// Set duration to the time left for this (valid) change, unless original request was
 	// shorter (otherwise the ephemeral access extension itself will abort the accessrequest)
 	var endLocalDateString string
-	if time.Duration(arDuration) > changeRemainingTime {  
+	if int64(arDuration) > int64(changeRemainingTime) {  
 		ar.Spec.Duration.Duration = changeRemainingTime
 		endLocalDateString = p.getLocalTime(validChange.EndDate)
 		p.createAbortJob(namespace, arName)
 	} else {
-		changeRemainingTime = time.Duration(arDuration)
+		changeRemainingTime = int64(arDuration)
 
 		var endDateTime time.Time = time.Now().Add(changeRemainingTime)
 		endLocalDateString = p.getLocalTime(endDateTime)
