@@ -290,7 +290,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
 	}
 
-	timezone = os.Getenv("TIMEZONE")
+	timezone := os.Getenv("TIMEZONE")
 	if timezone == "" {
 		p.Logger.Info("No timezone given (environment variable TIMEZONE is empty), assuming UTC")
 		timezone = "UTC"
@@ -361,7 +361,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 
 	var endDateTime time.Time
-	err = endDateTime.UnmarshalText([]byte(changeEndDateString))
+	err = endDateTime.UnmarshalText([]byte(changeEndDate))
 	loc, _ := time.LoadLocation(timezone)
 	endLocalDateString := fmt.Sprintf("%d:%d:%d", 
 	                                  endDateTime.In(loc).Hour(),
