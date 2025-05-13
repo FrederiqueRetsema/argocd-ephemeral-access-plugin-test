@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -98,19 +97,17 @@ func (p *ServiceNowPlugin) getTimezone() {
 	}
 }
 
-func (p *ServiceNowPlugin) getK8sConfig() (*rest.Config, *kubernetes.Clientset) {
-	var err error.Error
+func (p *ServiceNowPlugin) getK8sConfig() {
+	var err error
 	k8sconfig, err = rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
 	}
 
-	k8sclientset, err = kubernetes.NewForConfig(config)
+	k8sclientset, err = kubernetes.NewForConfig(k8sconfig)
 	if err != nil {
 		panic(err.Error())
 	}
-
-	return k8sconfig, k8sclientset
 }
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
@@ -162,7 +159,7 @@ func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 
 	p.Logger.Debug("Get credentials from secret " + secretName + "...")
 
-	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+	secret, err := k8sclientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 	if err != nil {
 		p.Logger.Error(fmt.Sprintf("Error getting secret %s, Does secret exist in namespace %s?", secretName, namespace))
 		panic(err.Error())
@@ -373,9 +370,9 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 	sysparm_offset := 0 
 
-	snowUrl = p.getSnowUrl()
-	timezone = p.getTimezone()
-	k8sconfig, k8sclientset = p.getK8sConfig()
+	p.getSnowUrl()
+	p.getTimezone()
+	p.getK8sConfig()
 
 	username, password := p.getSNOWCredentials()
 
