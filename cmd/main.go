@@ -329,35 +329,35 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
 	jobs := k8sclientset.BatchV1().Jobs(namespace)
     var backOffLimit int32 = 0
 
-    jobSpec := &batchv1.Job{
-        ObjectMeta: metav1.ObjectMeta{
-            Name:      jobName,
-            Namespace: namespace,
-        },
-        Spec: batchv1.JobSpec{
-            Template: v1.PodTemplateSpec{
-                Spec: v1.PodSpec{
-					ServiceAccountName: "remove-accessrequest-job-sa",
-                    Containers: []v1.Container{
-                        {
-                            Name:    jobName,
-                            Image:   "curlimages/curl:latest",
-                            Command: strings.Split(cmd, " "),
-                        },
-                    },
-                    RestartPolicy: v1.RestartPolicyNever,
-                },
-            },
-            BackoffLimit: &backOffLimit,
-        },
-    }
+    // jobSpec := &batchv1.Job{
+    //     ObjectMeta: metav1.ObjectMeta{
+    //         Name:      jobName,
+    //         Namespace: namespace,
+    //     },
+    //     Spec: batchv1.JobSpec{
+    //         Template: v1.PodTemplateSpec{
+    //             Spec: v1.PodSpec{
+	// 				ServiceAccountName: "remove-accessrequest-job-sa",
+    //                 Containers: []v1.Container{
+    //                     {
+    //                         Name:    jobName,
+    //                         Image:   "curlimages/curl:latest",
+    //                         Command: strings.Split(cmd, " "),
+    //                     },
+    //                 },
+    //                 RestartPolicy: v1.RestartPolicyNever,
+    //             },
+    //         },
+    //         BackoffLimit: &backOffLimit,
+    //     },
+    // }
 	cronJobSpec := &batchv1.CronJob{
         ObjectMeta: metav1.ObjectMeta{
             Name:      jobName,
             Namespace: namespace,
         },
         Spec: batchv1.CronJobSpec{
-			Schedule: fmt.Sprintf("%d %d %d %d *", jobStartTime.Minute(), jobStartTime.Hour(), jobStartTime.Day(), jobStartTime.Month())
+			Schedule: fmt.Sprintf("%d %d %d %d *", jobStartTime.Minute(), jobStartTime.Hour(), jobStartTime.Day(), jobStartTime.Month()),
 			ConcurrencyPolicy: v1.ForbidConcurrent,
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
