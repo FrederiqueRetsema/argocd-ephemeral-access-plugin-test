@@ -171,10 +171,10 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 	return cmdbResults.Result[0]
 }
 
-func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) []change_type {
+func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) ([]change_type, int) {
 	url := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=%d&sysparm_offset=%d", snowUrl, ciName, sysparm_limit, sysparm_offset)
 	p.Logger.Debug("Call to: " + url)
-
+	
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -206,7 +206,7 @@ func (p *ServiceNowPlugin) getChanges(username string, password string, ciName s
 	p.Logger.Debug("Type: "+changeResults.Result[0].Type+", Short description: "+changeResults.Result[0].ShortDescription+
                    ", Start Date: "+changeResults.Result[0].StartDate+", End Date: "+changeResults.Result[0].EndDate)
 
-	return changeResults.Result
+	return changeResults.Result, sysparm_offset+len(changeResults.Result)
 }
 
 func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
