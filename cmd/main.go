@@ -236,8 +236,7 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 
 	changeNumber := change.Number
 	changeShortDescription := change.ShortDescription
-	changeType := changeResults.Result[0].Type
-	changeShortDescription := changeResults.Result[0].ShortDescription
+	changeType := change.Type
     startDateStringOrg := change.StartDate
 	endDateStringOrg := change.EndDate
 
