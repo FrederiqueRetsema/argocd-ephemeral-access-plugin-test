@@ -421,7 +421,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 										 validChange.Number, 
 										 validChange.ShortDescription,
 										 requestedRole,
-										 p.getLocalTime(validChange.StartDate),
+										 p.getLocalTime(time.Now()),
 										 p.getLocalTime(validChange.EndDate))
 		p.Logger.Info(grantedAccessText)
 	} else {
