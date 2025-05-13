@@ -433,9 +433,9 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	// time.Duration. Convert via strings...
 	var endLocalDateString string
 
-	arDurationString = arDuration.String()
+	arDurationString := arDuration.String()
 	var arDurationTime time.Duration
-	arDurationTime.Unmarchal([]byte(arDurationString))
+	arDurationTime.UnmarchalText([]byte(arDurationString))
 
 	if arDurationTime > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
