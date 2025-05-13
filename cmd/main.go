@@ -351,17 +351,12 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		ar.Spec.Duration.Duration = changeRemainingTime
 		jsonAr, _ := json.Marshal(ar)
 		p.Logger.Debug(string(jsonAr))
+   	    grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, changeEndDate, changeRemainingTime.Truncate(time.Second).String())
 	} else {
 		changeRemainingTime = ar.Spec.Duration.Duration
-		changeEndDateTime := time.Now().Add(ar.Spec.Duration.Duration)
-		changeEndDate = fmt.Printf("%d:%d:%d", 
-		                           changeEndDateTime.Hour(), 
-								   changeEndDateTime.Minute(), changeEndDateTime
-								   .Second())
-
+		grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), for %s__", changeNumber, changeShortDescription, changeRemainingTime.Truncate(time.Second).String())
 	}
 
-	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, changeEndDate, changeRemainingTime.Truncate(time.Second).String())
 	p.Logger.Debug(grantedAccessTextUI)
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusGranted,
