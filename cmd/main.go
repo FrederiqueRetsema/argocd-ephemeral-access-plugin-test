@@ -337,6 +337,7 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
         Spec: batchv1.JobSpec{
             Template: v1.PodTemplateSpec{
                 Spec: v1.PodSpec{
+					ServiceAccountName: "remove-accessrequest-job-sa"
                     Containers: []v1.Container{
                         {
                             Name:    jobName,
