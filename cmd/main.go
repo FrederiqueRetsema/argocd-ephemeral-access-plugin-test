@@ -367,7 +367,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	requestedRole := ar.Spec.Role.TemplateRef.Name
 	namespace := ar.Spec.Application.Namespace
 	arName := ar.ObjectMeta.Name
-	arDuration := ar.Spec.Duration
+	arDuration := ar.Spec.Duration.Duration
 
 	sysparm_offset := 0 
 
