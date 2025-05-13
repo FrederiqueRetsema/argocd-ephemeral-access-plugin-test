@@ -428,13 +428,21 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	
 	// Set duration to the time left for this (valid) change, unless original request was
 	// shorter (otherwise the ephemeral access extension itself will abort the accessrequest)
+	//
+	// arDuration has type "k8s.io/apimachinery/pkg/apis/meta/v1".Duration, changeRemainingTime has type
+	// time.Duration. Convert via strings...
 	var endLocalDateString string
-	if int64(arDuration) > int64(changeRemainingTime) {  
+
+	arDurationString = ar.Duration.String()
+	var arDurationTime time.Duration
+	arDurationTime.Unmarchal([]byte(arDurationString))
+
+	if arDurationTime > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
 		endLocalDateString = p.getLocalTime(validChange.EndDate)
 		p.createAbortJob(namespace, arName)
 	} else {
-		changeRemainingTime = int64(arDuration)
+		changeRemainingTime = arDurationTime
 
 		var endDateTime time.Time = time.Now().Add(changeRemainingTime)
 		endLocalDateString = p.getLocalTime(endDateTime)
