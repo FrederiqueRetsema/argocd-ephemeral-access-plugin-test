@@ -98,7 +98,7 @@ func (p *ServiceNowPlugin) getTimezone() {
 	}
 }
 
-func (p *ServiceNowPlugin) getK8sConfig() (*Config, *Clientset) {
+func (p *ServiceNowPlugin) getK8sConfig() (*rest.Config, *kubernetes.Clientset) {
 	var err error.Error
 	k8sconfig, err = rest.InClusterConfig()
 	if err != nil {
