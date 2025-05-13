@@ -298,9 +298,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	p.Logger.Debug("This is a call to the GrantAccess method")
 
 	changeNumber := ""
-	changeType := ""
 	changeShortDescription := ""
-	changeEndDate := ""
 	sysparm_offset := 0 
 	requestedRole := ar.Spec.Role.TemplateRef.Name
 
@@ -336,7 +334,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 
 	snowChanges, sysparm_offset := p.getChanges(username, password, ciName, sysparm_offset)
-	validChange := nil
+	var validChange change_type = nil
 	var changeRemainingTime time.Duration = 0
 	var remainingTime time.Duration = 0
 	errorString = ""
@@ -346,6 +344,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 			errorString, remainingTime = p.checkChange(change)
 			if errorString == "" {
 				validChange = change
+				changeRemainingTime = remainingTime
 				break
 			}
 		}
