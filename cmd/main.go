@@ -61,7 +61,7 @@ func (p *ServiceNowPlugin) Init() error {
 	return nil
 }
 
-const sysparm_limit = 2
+const sysparm_limit = 3
 var snowUrl string
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
@@ -341,7 +341,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
     	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s", requesterName, changeType, changeNumber, changeShortDescription, requestedRole)
 		p.Logger.Info(grantedAccessText)
 	} else {
-		p.Logger.Error(fmt.Sprintf("Access Denied for %s, role %s: %s", requesterName, requestedRole, errorString)
+		p.Logger.Error(fmt.Sprintf("Access Denied for %s, role %s: %s", requesterName, requestedRole, errorString))
 		return p.DenyAccess(errorString)
 	} 
 	
