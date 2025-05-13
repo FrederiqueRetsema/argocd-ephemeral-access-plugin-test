@@ -340,7 +340,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	errorString = ""
 	for true {
 		for _, snowChange := range snowChanges {
-			change := p.parseChange(&snowChange)
+			change := p.parseChange(*snowChange)
 			errorString, remainingTime = p.checkChange(change)
 			if errorString == "" {
 				validChange = change
