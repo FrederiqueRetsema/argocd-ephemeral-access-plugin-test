@@ -365,7 +365,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	requesterName := ar.Spec.Subject.Username
 	requestedRole := ar.Spec.Role.TemplateRef.Name
 	namespace := ar.Spec.Application.Namespace
-	arName := ar.MetaData.Name
+	arName := ar.ObjectMeta.Name
 	arDuration := ar.Spec.Duration
 
 	sysparm_offset := 0 
@@ -433,7 +433,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	// time.Duration. Convert via strings...
 	var endLocalDateString string
 
-	arDurationString = ar.Duration.String()
+	arDurationString = arDuration.String()
 	var arDurationTime time.Duration
 	arDurationTime.Unmarchal([]byte(arDurationString))
 
