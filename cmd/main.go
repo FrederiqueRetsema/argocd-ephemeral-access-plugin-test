@@ -324,7 +324,7 @@ func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
 // https://dev.to/narasimha1997/create-kubernetes-jobs-in-golang-using-k8s-client-go-api-59ej
 func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName string) {
 	p.Logger.Debug(fmt.Sprintf("createAbortJob: %s, %s", namespace, accessrequestName))
-	jobName := "stop-"+accessrequestName
+	jobName := strings.Replace("stop-"+accessrequestName,".","-",-1)
 	cmd := fmt.Sprintf("curl --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt --header \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" -X DELETE https://kubernetes.default.svc.cluster.local/apis/ephemeral-access.argoproj-labs.io/v1alpha1/namespaces/argocd/accessrequests/%s", accessrequestName)
 	jobs := k8sclientset.BatchV1().Jobs(namespace)
     var backOffLimit int32 = 0
