@@ -345,10 +345,15 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		return p.DenyAccess(errorString)
 	} 
 	
-	// Set duration to the time left for this (valid) change
-	ar.Spec.Duration.Duration = changeRemainingTime
-	jsonAr, _ := json.Marshal(ar)
-	p.Logger.Debug(string(jsonAr))
+	// Set duration to the time left for this (valid) change, unless original request was
+	// shorter (otherwise the ephemeral access extension itself will abort the accessrequest)
+	if ar.Spec.Duration.Duration > changeRemainingTime {  
+		ar.Spec.Duration.Duration = changeRemainingTime
+		jsonAr, _ := json.Marshal(ar)
+		p.Logger.Debug(string(jsonAr))
+	} else {
+		changeRemainingTime = ar.Spec.Duration.Duration
+	}
 
 	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, changeEndDate, changeRemainingTime.Truncate(time.Second).String())
 	p.Logger.Debug(grantedAccessTextUI)
