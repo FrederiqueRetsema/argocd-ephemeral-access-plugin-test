@@ -307,10 +307,10 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 
 	changes, sysparm_offset := p.getChanges(username, password, ciName, sysparm_offset)
+	validChange := false
+	var changeRemainingTime time.Duration = 0
+	errorString = ""
 	for true {
-		validChange := false
-		errorString = ""
-		var changeRemainingTime time.Duration 
 		for _, change := range changes {
 			errorString, remainingTime := p.checkChange(change)
 			if errorString == "" {
