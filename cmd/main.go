@@ -283,6 +283,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	changeShortDescription := ""
 	changeEndDate := ""
 	sysparm_offset := 0 
+	requestedRole = ar.Spec.Role.TemplateRef.Name
 
 	snowUrl = os.Getenv("SERVICE_NOW_URL")
 	if snowUrl == "" {
@@ -325,7 +326,6 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 				changeShortDescription = change.ShortDescription
 				changeRemainingTime = remainingTime
 				changeEndDate = change.EndDate
-				requestedRole := ar.Spec.Role.TemplateRef.Name
 
 				break
 			}
