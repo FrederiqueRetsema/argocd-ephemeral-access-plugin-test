@@ -229,8 +229,8 @@ func (p *ServiceNowPlugin) parseChange(changeSnow change_snow_type) change_type 
 	change.Active = changeSnow.Active
 	change.Approval = changeSnow.Approval
 	change.ShortDescription = changeSnow.ShortDescription
-	change.StartDate = p.convertTime(changeSnow.startDate)
-	change.EndDate = p.convertTime(changeSnow.endDate)
+	change.StartDate = p.convertTime(changeSnow.StartDate)
+	change.EndDate = p.convertTime(changeSnow.EndDate)
 
 	return change
 }
@@ -254,7 +254,7 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_snow_type) string {
 	return errorText
 }
 
-func (p *ServiceNowPlugin) checkChange(change *change_type) (string, time.Duration) {
+func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duration) {
 	var startDateTime time.Time
 	var endDateTime time.Time
 
@@ -264,13 +264,13 @@ func (p *ServiceNowPlugin) checkChange(change *change_type) (string, time.Durati
 
 	currentTime := time.Now()
 
-    if change.endDate.Before(currentTime) ||
-	   change.startDate.After(currentTime) {
+    if change.EndDate.Before(currentTime) ||
+	   change.StartDate.After(currentTime) {
 		errorText = fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s (current date: %s)",
 	                             change.Number, 
 								 change.ShortDescription, 
-								 p.getLocalTime(change.startDate), 
-								 p.getLocalTime(change.endDate), 
+								 p.getLocalTime(change.StartDate), 
+								 p.getLocalTime(change.EndDate), 
 								 p.getLocalTime(currentTime))
 		p.Logger.Debug(errorText)
 	} else {
