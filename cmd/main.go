@@ -322,7 +322,7 @@ func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
 }
 
 // https://dev.to/narasimha1997/create-kubernetes-jobs-in-golang-using-k8s-client-go-api-59ej
-func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName string) {
+func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName string, jobStartTime time) {
 	p.Logger.Debug(fmt.Sprintf("createAbortJob: %s, %s", namespace, accessrequestName))
 	jobName := strings.Replace("stop-"+accessrequestName,".","-",-1)
 	cmd := fmt.Sprintf("curl --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt --header \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" -X DELETE https://kubernetes.default.svc.cluster.local/apis/ephemeral-access.argoproj-labs.io/v1alpha1/namespaces/argocd/accessrequests/%s", accessrequestName)
@@ -351,8 +351,32 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
             BackoffLimit: &backOffLimit,
         },
     }
+	cronJobSpec := &batchv1.CronJob{
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      jobName,
+            Namespace: namespace,
+        },
+        Spec: batchv1.CronJobSpec{
+			Schedule: fmt.Sprintf("%d %d %d %d *", jobStartTime.Minute(), jobStartTime.Hour(), jobStartTime.Day(), jobStartTime.Month())
+			ConcurrencyPolicy: v1.ForbidConcurrent,
+			Template: v1.PodTemplateSpec{
+				Spec: v1.PodSpec{
+					ServiceAccountName: "remove-accessrequest-job-sa",
+					Containers: []v1.Container{
+						{
+							Name:    jobName,
+							Image:   "curlimages/curl:latest",
+							Command: strings.Split(cmd, " "),
+						},
+					},
+					RestartPolicy: v1.RestartPolicyNever,
+				},
+			},
+			BackoffLimit: &backOffLimit,
+		},
+	}
 
-    _, err := jobs.Create(context.TODO(), jobSpec, metav1.CreateOptions{})
+    _, err := jobs.Create(context.TODO(), cronJobSpec, metav1.CreateOptions{})
     if err != nil {
         p.Logger.Error(fmt.Sprintf("Failed to create K8s job %s in namespace %s: %s.", jobName, namespace, err.Error()))
     } else {
