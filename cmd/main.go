@@ -52,7 +52,7 @@ type change_snow_type struct {
 	Approval string `json:"approval"` 
 }
 
-type change_type *struct {
+type change_type struct {
 	Type string 
 	Number string 
 	State float64 
@@ -335,7 +335,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 
 	snowChanges, sysparm_offset := p.getChanges(username, password, ciName, sysparm_offset)
-	var validChange change_type = nil
+	var validChange *change_type = nil
 	var changeRemainingTime time.Duration = 0
 	var remainingTime time.Duration = 0
 	errorString = ""
