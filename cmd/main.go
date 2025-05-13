@@ -78,6 +78,21 @@ const sysparm_limit = 5
 var snowUrl string
 var timezone string
 
+func (p *ServiceNowPlugin) getSnowUrl() {
+	snowUrl = os.Getenv("SERVICE_NOW_URL")
+	if snowUrl == "" {
+		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
+	}
+}
+
+func (p *ServiceNowPlugin) getTimezone() {
+	timezone = os.Getenv("TIMEZONE")
+	if timezone == "" {
+		p.Logger.Info("No timezone given (environment variable TIMEZONE is empty), assuming UTC")
+		timezone = "UTC"
+	}
+}
+
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
 	username := ar.Spec.Subject.Username
 	role := ar.Spec.Role.TemplateRef.Name
@@ -94,18 +109,22 @@ func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Applic
 	p.Logger.Debug("jsonApp: " + string(jsonApp))
 }
 
-func (p *ServiceNowPlugin) getCIName(app *argocd.Application) (string, string) {
+func (p *ServiceNowPlugin) getCILabel() string {
 	ciLabel := os.Getenv("CI_LABEL")
 	if ciLabel == "" {
 		p.Logger.Debug("No CI_LABEL environment variable, assuming ci_name")
 		ciLabel = "ci_name"
 	}
 
+	return ciLabel
+}
+
+func (p *ServiceNowPlugin) getCIName(app *argocd.Application, ciLabel string) string {
 	p.Logger.Debug("Look for " + ciLabel + " in metadata...")
 	ciName := app.ObjectMeta.Labels[ciLabel]
 	p.Logger.Debug("ciLabel found = " + ciName)
 
-	return ciLabel, string(ciName)
+	return string(ciName)
 }
 
 func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
@@ -295,30 +314,57 @@ func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
 						t.In(loc).Second())
 }
 
+func (p *ServiceNowPlugin) createAbortJob() () {
+	namespace := os.Getenv("SECRET_NAMESPACE")
+	if namespace == "" {
+		p.Logger.Debug("No SECRET_NAMESPACE environment variable, assuming argocd-ephemeral-access")
+		namespace = "argocd-ephemeral-access"
+	}
+
+	secretName := os.Getenv("SNOW_SECRET_NAME")
+	if secretName == "" {
+		p.Logger.Debug("No SNOW_SECRET_NAME environment variable, assuming snow-secret")
+		secretName = "snow-secret"
+	}
+
+	p.Logger.Debug("Get credentials from secret " + secretName + "...")
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+	if err != nil {
+		p.Logger.Error(fmt.Sprintf("Error getting secret %s, Does secret exist in namespace %s?", secretName, namespace))
+		panic(err.Error())
+	}
+
+	return string(secret.Data["username"]), string(secret.Data["password"])
+}
+
 func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
 	p.Logger.Debug("This is a call to the GrantAccess method")
-
-	sysparm_offset := 0 
-	requestedRole := ar.Spec.Role.TemplateRef.Name
-
-	snowUrl = os.Getenv("SERVICE_NOW_URL")
-	if snowUrl == "" {
-		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
-	}
-
-	timezone = os.Getenv("TIMEZONE")
-	if timezone == "" {
-		p.Logger.Info("No timezone given (environment variable TIMEZONE is empty), assuming UTC")
-		timezone = "UTC"
-	}
+	p.showRequest(ar, app)
 
 	requesterName := ar.Spec.Subject.Username
+	requestedRole := ar.Spec.Role.TemplateRef.Name
+	namespace := ar.Spec.Application.Namespace
+
+	sysparm_offset := 0 
+
+	snowUrl = p.getSnowUrl()
+	timezone = p.getTimezone()
 
 	username, password := p.getSNOWCredentials()
 
-	p.showRequest(ar, app)
-
-	ciLabel, ciName := p.getCIName(app)
+	ciLabel := p.getCILabel()
+	ciName := p.getCIName(app, ciLabel)
 	if ciName == "\"\"" {
 		application := ar.Spec.Application.Name
 		return p.DenyAccess("No label " + ciLabel + " in app " + application)
@@ -392,7 +438,6 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	p.Logger.Debug(grantedAccessTextUI)
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusGranted,
-		// The message can be returned as markdown
 		Message: grantedAccessTextUI,
 	}, nil
 }
