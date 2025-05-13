@@ -61,6 +61,7 @@ func (p *ServiceNowPlugin) Init() error {
 	return nil
 }
 
+const sysparm_limit = 1
 var snowUrl string
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
@@ -170,7 +171,7 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 	return cmdbResults.Result[0]
 }
 
-func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string) []change_type {
+func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) []change_type {
 	url := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date", snowUrl, ciName)
 	p.Logger.Debug("Call to: " + url)
 
@@ -278,6 +279,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	changeType := ""
 	changeShortDescription := ""
 	changeEndDate := ""
+	sysparm_offset := 0 
 
 	snowUrl = os.Getenv("SERVICE_NOW_URL")
 	if snowUrl == "" {
@@ -304,21 +306,27 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		return p.DenyAccess(errorString)
 	}
 
-	changes := p.getChanges(username, password, ciName)
-	validChange := false
-	errorString = ""
-	var changeRemainingTime time.Duration 
-	for _, change := range changes {
-		errorString, remainingTime := p.checkChange(change)
-		if errorString == "" {
-			validChange = true
+	changes, sysparm_offset := p.getChanges(username, password, ciName, sysparm_offset)
+	for true {
+		validChange := false
+		errorString = ""
+		var changeRemainingTime time.Duration 
+		for _, change := range changes {
+			errorString, remainingTime := p.checkChange(change)
+			if errorString == "" {
+				validChange = true
 
-			changeNumber = change.Number
-			changeType = change.Type
-			changeShortDescription = change.ShortDescription
-			changeRemainingTime = remainingTime
-			changeEndDate = change.EndDate
+				changeNumber = change.Number
+				changeType = change.Type
+				changeShortDescription = change.ShortDescription
+				changeRemainingTime = remainingTime
+				changeEndDate = change.EndDate
 
+				break
+			}
+		}
+		if validChange || len(changes) < sysparm_limit
+		{
 			break
 		}
 	}
