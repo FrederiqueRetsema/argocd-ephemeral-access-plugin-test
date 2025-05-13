@@ -30,16 +30,16 @@ type ServiceNowPlugin struct {
 	Logger hclog.Logger
 }
 
-type cmdb_type *struct {
+type cmdb_snow_type *struct {
 	InstallStatus string `json:"install_status"`
 	Name string `json:"name"`
 }
 
-type cmdb_results_type *struct {
-	Result []cmdb_type `json:"result"` 
+type cmdb_results_snow_type *struct {
+	Result []cmdb_snow_type `json:"result"` 
 }
 
-type change_type *struct {
+type change_snow_type struct {
 	Type string `json:"type"`
 	Number string `json:"number"`
 	State float64 `json:"state"`
@@ -52,8 +52,21 @@ type change_type *struct {
 	Approval string `json:"approval"` 
 }
 
-type change_results_type *struct {
-	Result []change_type `json:"result"`
+type change_type *struct {
+	Type string 
+	Number string 
+	State float64 
+	Phase string 
+	CMDBCi string 
+	Active string 
+	EndDate time.Time 
+	ShortDescription string 
+	StartDate time.Time 
+	Approval string  
+}
+
+type change_results_snow_type *struct {
+	Result []*change_snow_type `json:"result"`
 }
 
 func (p *ServiceNowPlugin) Init() error {
@@ -61,7 +74,7 @@ func (p *ServiceNowPlugin) Init() error {
 	return nil
 }
 
-const sysparm_limit = 3
+const sysparm_limit = 5
 var snowUrl string
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
@@ -124,19 +137,15 @@ func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 		panic(err.Error())
 	}
 
-//	jsonSecret, _ := json.Marshal(secret)
-//	p.Logger.Debug(string(jsonSecret))
-
 	return string(secret.Data["username"]), string(secret.Data["password"])
 }
 
-func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) cmdb_type {
+func (p *ServiceNowPlugin) getFromSNOWAPI(username string, password string, apiCall string) []byte {
 	if snowUrl == "" {
 		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
 	}
 
-	url := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
-	p.Logger.Debug("Call to: " + url)
+	p.Logger.Debug("apiCall: " + apiCall)
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
@@ -160,8 +169,16 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 
 	p.Logger.Debug(string(body))
 
-	var cmdbResults cmdb_results_type
-	err = json.Unmarshal(body, &cmdbResults)
+	return body
+}
+
+func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) cmdb_snow_type {
+
+	apiCall := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
+	response := p.getFromSNOWAPI(apiCall)
+
+	var cmdbResults cmdb_results_snow_type
+	err = json.Unmarshal(response, &cmdbResults)
 	if err != nil {
 		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
 	}
@@ -171,33 +188,12 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 	return cmdbResults.Result[0]
 }
 
-func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) ([]change_type, int) {
-	url := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=%d&sysparm_offset=%d", snowUrl, ciName, sysparm_limit, sysparm_offset)
-	p.Logger.Debug("Call to: " + url)
-	
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		p.Logger.Error("Error in NewRequest: " + err.Error())
-	}
+func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) ([]*change_snow_type, int) {
 
-	req.Header.Add("Accept", "application/json")
-	req.SetBasicAuth(username, password)
-	resp, err := client.Do(req)
-	if err != nil {
-		p.Logger.Error("Error in client.Do: " + err.Error())
-	}
+	apiCall := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=%d&sysparm_offset=%d", snowUrl, ciName, sysparm_limit, sysparm_offset)
+	response := p.getFromSNOWAPI(apiCall)
 
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		p.Logger.Error("Error in io.ReadAll: " + err.Error())
-	}
-
-	p.Logger.Debug(string(body))
-
-	var changeResults change_results_type
+	var changeResults change_results_snow_type
 	err = json.Unmarshal(body, &changeResults)
 	if err != nil {
 		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
@@ -206,7 +202,40 @@ func (p *ServiceNowPlugin) getChanges(username string, password string, ciName s
 	return changeResults.Result, sysparm_offset+len(changeResults.Result)
 }
 
-func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
+func (p *ServiceNowPlugin) convertTime(timestring string) (time.Time) {
+	goTimeString := strings.Replace(timestring," ","T",-1)+"Z"
+
+	var goTime time.Time
+	err := goTime.UnmarshalText([]byte(goTimeString))
+	if err != nil {
+		p.Logger.Debug("Error in converting "+timestring+" to go Time: "+err.Error())
+	}
+	return goTime
+}
+
+func (p *ServiceNowPlugin) parseChange(changeSnow change_snow_type) change_type {
+	var change change_type
+
+	p.Logger.Debug(fmt.Sprintf("Change: Type: %s, Short description: %s, Start Date: %s, End Date: %s",
+				   changeSnow.Type, 
+				   changeSnow.ShortDescription, 
+				   changeSnow.StartDate, 
+				   changeSnow.EndDate))
+	
+	change.Type = changeSnow.Type
+	change.Number = changeSnow.Number
+	change.State = changeSnow.State
+	change.CMDBCi = changeSnow.CMDBCi
+	change.Active = changeSnow.Active
+	change.Approval = changeSnow.Approval
+	change.ShortDescription = changeSnow.ShortDescription
+	change.StartDate = p.convertTime(changeSnow.startDate)
+	change.EndDate = p.convertTime(changeSnow.endDate)
+
+	return change
+}
+
+func (p *ServiceNowPlugin) checkCI(CI cmdb_snow_type) string {
 	errorText := ""
 	installStatus := CI.InstallStatus
 	ciName := CI.Name
@@ -225,8 +254,7 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_type) string {
 	return errorText
 }
 
-func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duration) {
-//	type,number,short_description,start_date,end_date", snowUrl, ciName)
+func (p *ServiceNowPlugin) checkChange(change *change_type) (string, time.Duration) {
 	var startDateTime time.Time
 	var endDateTime time.Time
 
@@ -234,32 +262,16 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 	var remainingTime time.Duration
 	remainingTime = 0
 
-	changeNumber := change.Number
-	changeShortDescription := change.ShortDescription
-	changeType := change.Type
-    startDateStringOrg := change.StartDate
-	endDateStringOrg := change.EndDate
+	currentTime := time.Now()
 
-	p.Logger.Debug(fmt.Sprintf("Change: Type: %s, Short description: %s, Start Date: %s, End Date: %s",
-	                           changeType, changeShortDescription, startDateStringOrg, endDateStringOrg))
-
-    startDateString := strings.Replace(change.StartDate," ","T",-1)+"Z"
-	err := startDateTime.UnmarshalText([]byte(startDateString))
-	if err != nil {
-		p.Logger.Debug(err.Error())
-	}
-
-	endDateString := strings.Replace(change.EndDate," ","T",-1)+"Z"
-	err = endDateTime.UnmarshalText([]byte(endDateString))
-	if err != nil {
-		p.Logger.Debug(err.Error())
-	} 
-
-    if endDateTime.Before(time.Now()) ||
-	   startDateTime.After(time.Now()) {
-		currentTimeString, _ := time.Now().MarshalText()
+    if change.endDate.Before(currentTime) ||
+	   change.startDate.After(currentTime) {
 		errorText = fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s (current date: %s)",
-	                             changeNumber, changeShortDescription, startDateString, endDateString, currentTimeString)
+	                             change.Number, 
+								 change.ShortDescription, 
+								 p.getLocalTime(change.startDate), 
+								 p.getLocalTime(change.endDate), 
+								 p.getLocalTime(currentTime))
 		p.Logger.Debug(errorText)
 	} else {
 		remainingTime = endDateTime.Sub(time.Now())
@@ -273,6 +285,15 @@ func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, err
 		Status:  plugin.GrantStatusDenied,
 		Message: reason,
 	}, nil
+}
+
+func (p *ServiceNowPlugin) getLocalTime(timezone string, t time.Time) string {
+	loc, _ := time.LoadLocation(timezone)
+
+	return fmt.Sprintf("%02d:%02d:%02d", 
+						t.In(loc).Hour(),
+						t.In(loc).Minute(),
+						t.In(loc).Second())
 }
 
 func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
@@ -316,35 +337,34 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		return p.DenyAccess(errorString)
 	}
 
-	changes, sysparm_offset := p.getChanges(username, password, ciName, sysparm_offset)
-	validChange := false
+	snowChanges, sysparm_offset := p.getChanges(username, password, ciName, sysparm_offset)
+	validChange := nil
 	var changeRemainingTime time.Duration = 0
 	var remainingTime time.Duration = 0
 	errorString = ""
 	for true {
-		for _, change := range changes {
+		for _, snowChange := range snowChanges {
+			change := p.parseChange(snowChange)
 			errorString, remainingTime = p.checkChange(change)
 			if errorString == "" {
-				validChange = true
-
-				changeNumber = change.Number
-				changeType = change.Type
-				changeShortDescription = change.ShortDescription
-				changeRemainingTime = remainingTime
-				changeEndDate = change.EndDate
-
+				validChange = change
 				break
 			}
 		}
-		if validChange || len(changes) < sysparm_limit {
+		if validChange != nil || len(changes) < sysparm_limit {
 			break
 		} else {
-			changes, sysparm_offset = p.getChanges(username, password, ciName, sysparm_offset)
+			snowChanges, sysparm_offset = p.getChanges(username, password, ciName, sysparm_offset)
 		}
 	}
 	
-	if validChange {		
-    	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s", requesterName, changeType, changeNumber, changeShortDescription, requestedRole)
+	if validChange != nil {		
+    	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s", 
+		                                 requesterName, 
+										 validChange.Type, 
+										 validChange.Number, 
+										 validChange.ShortDescription,
+										 requestedRole)
 		p.Logger.Info(grantedAccessText)
 	} else {
 		p.Logger.Error(fmt.Sprintf("Access Denied for %s, role %s: %s", requesterName, requestedRole, errorString))
@@ -356,29 +376,17 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	var endLocalDateString string
 	if ar.Spec.Duration.Duration > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
-
-		var endDateTime time.Time
-		endDateString := strings.Replace(changeEndDate," ","T",-1)+"Z"
-		_ = endDateTime.UnmarshalText([]byte(endDateString))
-		loc, _ := time.LoadLocation(timezone)
-		endLocalDateString = fmt.Sprintf("%02d:%02d:%02d", 
-										endDateTime.In(loc).Hour(),
-										endDateTime.In(loc).Minute(),
-										endDateTime.In(loc).Second())
+		endLocalDateString = p.getLocalTime(timezone, validChange.EndDate)
 	} else {
 		changeRemainingTime = ar.Spec.Duration.Duration
 
-        var timezone = "Europe/Amsterdam"
 		var endDateTime time.Time = time.Now().Add(changeRemainingTime)
-		loc, _ := time.LoadLocation(timezone)
-		endLocalDateString = fmt.Sprintf("%02d:%02d:%02d", 
-										endDateTime.In(loc).Hour(),
-										endDateTime.In(loc).Minute(),
-										endDateTime.In(loc).Second())
+		endLocalDateString = p.getLocalTime(timezone, endDateTime)
 	}
 
 	jsonAr, _ := json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
+
 	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, endLocalDateString, changeRemainingTime.Truncate(time.Second).String())
 
 	p.Logger.Debug(grantedAccessTextUI)
