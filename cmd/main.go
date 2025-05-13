@@ -384,9 +384,9 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	p.Logger.Debug(string(jsonAr))
 
 	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", 
-										change.Number, 
-										change.ShortDescription, 
-										p.getLocalTime(change.EndDate), 
+										validChange.Number, 
+										validChange.ShortDescription, 
+										endLocalDateString, 
 										changeRemainingTime.Truncate(time.Second).String())
 
 	p.Logger.Debug(grantedAccessTextUI)
