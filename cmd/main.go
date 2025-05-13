@@ -429,12 +429,12 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	// Set duration to the time left for this (valid) change, unless original request was
 	// shorter (otherwise the ephemeral access extension itself will abort the accessrequest)
 	var endLocalDateString string
-	if arDuration > changeRemainingTime {  
+	if time.Duration(arDuration) > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
 		endLocalDateString = p.getLocalTime(validChange.EndDate)
 		p.createAbortJob(namespace, arName)
 	} else {
-		changeRemainingTime = arDuration
+		changeRemainingTime = time.Duration(arDuration)
 
 		var endDateTime time.Time = time.Now().Add(changeRemainingTime)
 		endLocalDateString = p.getLocalTime(endDateTime)
