@@ -328,7 +328,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		if validChange || len(changes) < sysparm_limit {
 			break
 		} else {
-			changes, sysparm_offset := p.getChanges(username, password, ciName, sysparm_offset)
+			changes, sysparm_offset = p.getChanges(username, password, ciName, sysparm_offset)
 		}
 	}
 	
