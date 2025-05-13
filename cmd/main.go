@@ -340,7 +340,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	errorString = ""
 	for true {
 		for _, snowChange := range snowChanges {
-			change := p.parseChange(snowChange)
+			change := p.parseChange(&snowChange)
 			errorString, remainingTime = p.checkChange(change)
 			if errorString == "" {
 				validChange = change
@@ -348,7 +348,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 				break
 			}
 		}
-		if validChange != nil || len(changes) < sysparm_limit {
+		if validChange != nil || len(snowChanges) < sysparm_limit {
 			break
 		} else {
 			snowChanges, sysparm_offset = p.getChanges(username, password, ciName, sysparm_offset)
