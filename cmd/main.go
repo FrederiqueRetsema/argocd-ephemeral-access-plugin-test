@@ -326,7 +326,7 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
 	p.Logger.Debug(fmt.Sprintf("createAbortJob: %s, %s", namespace, accessrequestName))
 	jobName := strings.Replace("stop-"+accessrequestName,".","-",-1)
 	cmd := fmt.Sprintf("curl --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt --header \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" -X DELETE https://kubernetes.default.svc.cluster.local/apis/ephemeral-access.argoproj-labs.io/v1alpha1/namespaces/argocd/accessrequests/%s", accessrequestName)
-	jobs := k8sclientset.BatchV1().Jobs(namespace)
+	jobs := k8sclientset.BatchV1().CronJobs(namespace)
     var backOffLimit int32 = 0
 
     // jobSpec := &batchv1.Job{
@@ -379,7 +379,7 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
 		},
 	}
 
-    _, err := jobs.Create(context.TODO(), cronJobSpec, metav1.CreateOptions{})
+    _, err := cronjobs.Create(context.TODO(), cronJobSpec, metav1.CreateOptions{})
     if err != nil {
         p.Logger.Error(fmt.Sprintf("Failed to create K8s job %s in namespace %s: %s.", jobName, namespace, err.Error()))
     } else {
