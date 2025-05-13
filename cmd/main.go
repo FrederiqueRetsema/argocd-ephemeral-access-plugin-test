@@ -347,21 +347,22 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	
 	// Set duration to the time left for this (valid) change, unless original request was
 	// shorter (otherwise the ephemeral access extension itself will abort the accessrequest)
+	var grantedAccessTextUI string
 	if ar.Spec.Duration.Duration > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
 		jsonAr, _ := json.Marshal(ar)
 		p.Logger.Debug(string(jsonAr))
-   	    grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, changeEndDate, changeRemainingTime.Truncate(time.Second).String())
+   	    grantedAccessTextUI = fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, changeEndDate, changeRemainingTime.Truncate(time.Second).String())
 	} else {
 		changeRemainingTime = ar.Spec.Duration.Duration
-		grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), for %s__", changeNumber, changeShortDescription, changeRemainingTime.Truncate(time.Second).String())
+		grantedAccessTextUI = fmt.Sprintf("Granted access: change __%s__ (%s), for %s__", changeNumber, changeShortDescription, changeRemainingTime.Truncate(time.Second).String())
 	}
 
 	p.Logger.Debug(grantedAccessTextUI)
 	return &plugin.GrantResponse{
 		Status: plugin.GrantStatusGranted,
 		// The message can be returned as markdown
-		Message: fmt.Sprintf(grantedAccessTextUI),
+		Message: grantedAccessTextUI,
 	}, nil
 }
 
