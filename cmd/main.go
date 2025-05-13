@@ -76,6 +76,7 @@ func (p *ServiceNowPlugin) Init() error {
 
 const sysparm_limit = 5
 var snowUrl string
+var timezone string
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
 	username := ar.Spec.Subject.Username
@@ -255,9 +256,6 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_snow_type) string {
 }
 
 func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duration) {
-	var startDateTime time.Time
-	var endDateTime time.Time
-
 	errorText := ""
 	var remainingTime time.Duration
 	remainingTime = 0
@@ -274,7 +272,7 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 								 p.getLocalTime(currentTime))
 		p.Logger.Debug(errorText)
 	} else {
-		remainingTime = endDateTime.Sub(time.Now())
+		remainingTime = change.EndDate.Sub(time.Now())
 	}
 
 	return errorText, remainingTime
@@ -287,7 +285,7 @@ func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, err
 	}, nil
 }
 
-func (p *ServiceNowPlugin) getLocalTime(timezone string, t time.Time) string {
+func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
 	loc, _ := time.LoadLocation(timezone)
 
 	return fmt.Sprintf("%02d:%02d:%02d", 
@@ -311,7 +309,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
 	}
 
-	timezone := os.Getenv("TIMEZONE")
+	timezone = os.Getenv("TIMEZONE")
 	if timezone == "" {
 		p.Logger.Info("No timezone given (environment variable TIMEZONE is empty), assuming UTC")
 		timezone = "UTC"
@@ -376,12 +374,12 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	var endLocalDateString string
 	if ar.Spec.Duration.Duration > changeRemainingTime {  
 		ar.Spec.Duration.Duration = changeRemainingTime
-		endLocalDateString = p.getLocalTime(timezone, validChange.EndDate)
+		endLocalDateString = p.getLocalTime(validChange.EndDate)
 	} else {
 		changeRemainingTime = ar.Spec.Duration.Duration
 
 		var endDateTime time.Time = time.Now().Add(changeRemainingTime)
-		endLocalDateString = p.getLocalTime(timezone, endDateTime)
+		endLocalDateString = p.getLocalTime(endDateTime)
 	}
 
 	jsonAr, _ := json.Marshal(ar)
