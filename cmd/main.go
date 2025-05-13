@@ -135,6 +135,7 @@ func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 
 	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 	if err != nil {
+		p.Logger.Error(fmt.Sprintf("Error getting secret %s, Does secret exist in namespace %s?", secretName, namespace))
 		panic(err.Error())
 	}
 
