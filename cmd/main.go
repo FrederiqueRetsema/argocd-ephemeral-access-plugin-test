@@ -124,8 +124,8 @@ func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 		panic(err.Error())
 	}
 
-	jsonSecret, _ := json.Marshal(secret)
-	p.Logger.Debug(string(jsonSecret))
+//	jsonSecret, _ := json.Marshal(secret)
+//	p.Logger.Debug(string(jsonSecret))
 
 	return string(secret.Data["username"]), string(secret.Data["password"])
 }
@@ -364,7 +364,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	endDateString := strings.Replace(changeEndDate," ","T",-1)+"Z"
 	_ = endDateTime.UnmarshalText([]byte(endDateString))
 	loc, _ := time.LoadLocation(timezone)
-	endLocalDateString := fmt.Sprintf("%d:%d:%d", 
+	endLocalDateString := fmt.Sprintf("%02d:%02d:%02d", 
 	                                  endDateTime.In(loc).Hour(),
 				   				      endDateTime.In(loc).Minute(),
 							          endDateTime.In(loc).Second())
