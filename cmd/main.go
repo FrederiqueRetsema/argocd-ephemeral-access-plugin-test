@@ -203,9 +203,6 @@ func (p *ServiceNowPlugin) getChanges(username string, password string, ciName s
 		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
 	}
 
-	p.Logger.Debug("Type: "+changeResults.Result[0].Type+", Short description: "+changeResults.Result[0].ShortDescription+
-                   ", Start Date: "+changeResults.Result[0].StartDate+", End Date: "+changeResults.Result[0].EndDate)
-
 	return changeResults.Result, sysparm_offset+len(changeResults.Result)
 }
 
@@ -239,6 +236,13 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 
 	changeNumber := change.Number
 	changeShortDescription := change.ShortDescription
+	changeType := changeResults.Result[0].Type
+	changeShortDescription := changeResults.Result[0].ShortDescription
+    startDateStringOrg := change.StartDate
+	endDateStringOrg := change.EndDate
+
+	p.Logger.Debug(fmt.Sprintf("Change: Type: %s, Short description: %s, Start Date: %s, End Date: %s",
+	                           changeType, changeShortDescription, startDateStringOrg, endDateStringOrg))
 
     startDateString := strings.Replace(change.StartDate," ","T",-1)+"Z"
 	err := startDateTime.UnmarshalText([]byte(startDateString))
