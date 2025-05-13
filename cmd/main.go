@@ -172,7 +172,7 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 }
 
 func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) []change_type {
-	url := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date", snowUrl, ciName)
+	url := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=%d&sysparm_offset=%d", snowUrl, ciName, sysparm_limit, sysparm_offset)
 	p.Logger.Debug("Call to: " + url)
 
 	client := &http.Client{}
@@ -325,8 +325,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 				break
 			}
 		}
-		if validChange || len(changes) < sysparm_limit
-		{
+		if validChange || len(changes) < sysparm_limit {
 			break
 		}
 	}
