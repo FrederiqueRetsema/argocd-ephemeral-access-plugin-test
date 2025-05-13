@@ -361,7 +361,8 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 
 	var endDateTime time.Time
-	err = endDateTime.UnmarshalText([]byte(changeEndDate))
+	endDateString := strings.Replace(changeEndDate," ","T",-1)+"Z"
+	_ = endDateTime.UnmarshalText([]byte(endDateString))
 	loc, _ := time.LoadLocation(timezone)
 	endLocalDateString := fmt.Sprintf("%d:%d:%d", 
 	                                  endDateTime.In(loc).Hour(),
