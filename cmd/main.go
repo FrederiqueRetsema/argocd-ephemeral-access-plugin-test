@@ -371,8 +371,8 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
 								},
 							},
 							RestartPolicy: v1.RestartPolicyNever,
-						}
-					}
+						},
+					},
 	  			    BackoffLimit: &backOffLimit,
 				},
 			},
