@@ -292,8 +292,8 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 	timezone = os.Getenv("TIMEZONE")
 	if timezone == "" {
-		p.Logger.Info("No timezone given (environment variable TIMEZONE is empty), assuming UTC"))
-		timezone = UTC
+		p.Logger.Info("No timezone given (environment variable TIMEZONE is empty), assuming UTC")
+		timezone = "UTC"
 	}
 
 	requesterName := ar.Spec.Subject.Username
