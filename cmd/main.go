@@ -344,7 +344,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 			change := p.parseChange(*snowChange)
 			errorString, remainingTime = p.checkChange(change)
 			if errorString == "" {
-				validChange = *change
+				validChange = &change
 				changeRemainingTime = remainingTime
 				break
 			}
