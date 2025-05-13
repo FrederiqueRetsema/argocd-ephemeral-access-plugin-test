@@ -415,12 +415,14 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}
 	
 	if validChange != nil {		
-    	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s", 
+    	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s, from %s to %s", 
 		                                 requesterName, 
 										 validChange.Type, 
 										 validChange.Number, 
 										 validChange.ShortDescription,
-										 requestedRole)
+										 requestedRole,
+										 p.getLocalTime(validChange.StartDate),
+										 p.getLocalTime(validChange.EndDate))
 		p.Logger.Info(grantedAccessText)
 	} else {
 		p.Logger.Error(fmt.Sprintf("Access Denied for %s, role %s: %s", requesterName, requestedRole, errorString))
