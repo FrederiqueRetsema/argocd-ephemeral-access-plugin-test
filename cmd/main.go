@@ -298,8 +298,6 @@ func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
 func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
 	p.Logger.Debug("This is a call to the GrantAccess method")
 
-	changeNumber := ""
-	changeShortDescription := ""
 	sysparm_offset := 0 
 	requestedRole := ar.Spec.Role.TemplateRef.Name
 
@@ -385,7 +383,11 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	jsonAr, _ := json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
 
-	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", changeNumber, changeShortDescription, endLocalDateString, changeRemainingTime.Truncate(time.Second).String())
+	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", 
+										change.Number, 
+										change.ShortDescription, 
+										p.getLocalTime(change.EndDate), 
+										changeRemainingTime.Truncate(time.Second).String())
 
 	p.Logger.Debug(grantedAccessTextUI)
 	return &plugin.GrantResponse{
