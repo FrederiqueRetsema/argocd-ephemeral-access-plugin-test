@@ -80,8 +80,8 @@ func (p *ServiceNowPlugin) Init() error {
 const sysparm_limit = 5
 var snowUrl string
 var timezone string
-var k8sconfig *Config
-var k8sclientset *Clientset
+var k8sconfig *rest.Config
+var k8sclientset *kubernetes.Clientset
 
 func (p *ServiceNowPlugin) getSnowUrl() {
 	snowUrl = os.Getenv("SERVICE_NOW_URL")
