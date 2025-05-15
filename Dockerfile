@@ -42,4 +42,3 @@ COPY --from=builder --chmod=500 --chown=65532 /workspace/plugin .
 # Set the user to the nonroot user defined in the
 # argoprojlabs/argocd-ephemeral-access-plugin image.
 USER 65532
-ENV GODEBUG=http2debug=2

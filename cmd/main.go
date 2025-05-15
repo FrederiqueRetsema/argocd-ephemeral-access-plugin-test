@@ -23,9 +23,9 @@ import (
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/log"
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/plugin"
 	goPlugin "github.com/hashicorp/go-plugin"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type ServiceNowPlugin struct {
@@ -34,67 +34,71 @@ type ServiceNowPlugin struct {
 
 type cmdb_snow_type *struct {
 	InstallStatus string `json:"install_status"`
-	Name string `json:"name"`
+	Name          string `json:"name"`
 }
 
-type cmdb_results_snow_type *struct {
-	Result []cmdb_snow_type `json:"result"` 
+type cmdb_results_snow_type struct {
+	Result []cmdb_snow_type `json:"result"`
 }
 
-type change_snow_type struct {
-	Type string `json:"type"`
-	Number string `json:"number"`
-	State float64 `json:"state"`
-	Phase string `json:"phase"`
-	CMDBCi string `json:"cmdb_ci"`
-	Active string `json:"active"`
-	EndDate string `json:"end_date"`
-	ShortDescription string `json:"short_description"`
-	StartDate string `json:"start_date"`
-	Approval string `json:"approval"` 
+type change_snow_type *struct {
+	Type             string  `json:"type"`
+	Number           string  `json:"number"`
+	State            float64 `json:"state"`
+	Phase            string  `json:"phase"`
+	CMDBCi           string  `json:"cmdb_ci"`
+	Active           string  `json:"active"`
+	EndDate          string  `json:"end_date"`
+	ShortDescription string  `json:"short_description"`
+	StartDate        string  `json:"start_date"`
+	Approval         string  `json:"approval"`
 }
 
 type change_type struct {
-	Type string 
-	Number string 
-	State float64 
-	Phase string 
-	CMDBCi string 
-	Active string 
-	EndDate time.Time 
-	ShortDescription string 
-	StartDate time.Time 
-	Approval string  
+	Type             string
+	Number           string
+	State            float64
+	Phase            string
+	CMDBCi           string
+	Active           string
+	EndDate          time.Time
+	ShortDescription string
+	StartDate        time.Time
+	Approval         string
 }
 
-type change_results_snow_type *struct {
-	Result []*change_snow_type `json:"result"`
+type change_results_snow_type struct {
+	Result []change_snow_type `json:"result"`
 }
+
+const sysparm_limit = 5
+
+var snowUrl string
+var timezone string
+var k8sconfig *rest.Config
+var k8sclientset kubernetes.Interface
 
 func (p *ServiceNowPlugin) Init() error {
 	p.Logger.Debug("This is a call to the Init method")
 	return nil
 }
 
-const sysparm_limit = 5
-var snowUrl string
-var timezone string
-var k8sconfig *rest.Config
-var k8sclientset *kubernetes.Clientset
-
-func (p *ServiceNowPlugin) getSnowUrl() {
-	snowUrl = os.Getenv("SERVICE_NOW_URL")
-	if snowUrl == "" {
-		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
+func (p *ServiceNowPlugin) getEnvVarWithPanic(envVarName string, panicText string) string {
+	returnValue := os.Getenv(envVarName)
+	if returnValue == "" {
+		p.Logger.Error(panicText)
+		panic(errors.New(panicText))
 	}
+	return returnValue
 }
 
-func (p *ServiceNowPlugin) getTimezone() {
-	timezone = os.Getenv("TIMEZONE")
-	if timezone == "" {
-		p.Logger.Info("No timezone given (environment variable TIMEZONE is empty), assuming UTC")
-		timezone = "UTC"
+func (p *ServiceNowPlugin) getEnvVarWithDefault(envVarName string, envVarDefault string) string {
+	returnValue := os.Getenv(envVarName)
+	if returnValue == "" {
+		p.Logger.Debug(fmt.Sprintf("Environment variable %s is empty, assuming %s", envVarName, envVarDefault))
+		returnValue = envVarDefault
 	}
+	return returnValue
 }
 
 func (p *ServiceNowPlugin) getK8sConfig() {
@@ -108,6 +112,13 @@ func (p *ServiceNowPlugin) getK8sConfig() {
 	if err != nil {
 		panic(err.Error())
 	}
+}
+
+func (p *ServiceNowPlugin) getCIName(app *argocd.Application, ciLabel string) string {
+	ciName := string(app.ObjectMeta.Labels[ciLabel])
+	p.Logger.Debug(fmt.Sprintf("ciLabel %s found: %s", ciLabel, ciName))
+
+	return ciName
 }
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
@@ -126,76 +137,61 @@ func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Applic
 	p.Logger.Debug("jsonApp: " + string(jsonApp))
 }
 
-func (p *ServiceNowPlugin) getCILabel() string {
-	ciLabel := os.Getenv("CI_LABEL")
-	if ciLabel == "" {
-		p.Logger.Debug("No CI_LABEL environment variable, assuming ci_name")
-		ciLabel = "ci_name"
-	}
-
-	return ciLabel
-}
-
-func (p *ServiceNowPlugin) getCIName(app *argocd.Application, ciLabel string) string {
-	p.Logger.Debug("Look for " + ciLabel + " in metadata...")
-	ciName := app.ObjectMeta.Labels[ciLabel]
-	p.Logger.Debug("ciLabel found = " + ciName)
-
-	return string(ciName)
-}
-
-func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
-	namespace := os.Getenv("SECRET_NAMESPACE")
-	if namespace == "" {
-		p.Logger.Debug("No SECRET_NAMESPACE environment variable, assuming argocd-ephemeral-access")
-		namespace = "argocd-ephemeral-access"
-	}
-
-	secretName := os.Getenv("SNOW_SECRET_NAME")
-	if secretName == "" {
-		p.Logger.Debug("No SNOW_SECRET_NAME environment variable, assuming snow-secret")
-		secretName = "snow-secret"
-	}
-
-	p.Logger.Debug("Get credentials from secret " + secretName + "...")
+func (p *ServiceNowPlugin) getCredentialsFromSecret(namespace string, secretName string, usernameKey string, passwordKey string) (string, string) {
+	p.Logger.Debug(fmt.Sprintf("Get credentials from secret [%s]%s...", namespace, secretName))
 
 	secret, err := k8sclientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 	if err != nil {
-		p.Logger.Error(fmt.Sprintf("Error getting secret %s, Does secret exist in namespace %s?", secretName, namespace))
+		p.Logger.Error(fmt.Sprintf("Error getting secret %s, does secret exist in namespace %s?", secretName, namespace))
 		panic(err.Error())
 	}
 
-	return string(secret.Data["username"]), string(secret.Data["password"])
+	return string(secret.Data[usernameKey]), string(secret.Data[passwordKey])
+}
+
+func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
+	namespace := p.getEnvVarWithDefault("SECRET_NAMESPACE", "argocd-ephemeral-access")
+	secretName := p.getEnvVarWithDefault("SNOW_SECRET_NAME", "snow-secret")
+
+	return p.getCredentialsFromSecret(namespace, secretName, "username", "password")
 }
 
 func (p *ServiceNowPlugin) getFromSNOWAPI(username string, password string, apiCall string) []byte {
-	if snowUrl == "" {
-		panic(errors.New("No Service Now URL given (environment variable SERVICE_NOW_URL is empty)"))
-	}
-
 	p.Logger.Debug("apiCall: " + apiCall)
 
-	client := &http.Client{}
 	req, err := http.NewRequest("GET", apiCall, nil)
 	if err != nil {
-		p.Logger.Error("Error in NewRequest: " + err.Error())
+		errorText := "Error in NewRequest: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
 	}
 
 	req.Header.Add("Accept", "application/json")
 	req.SetBasicAuth(username, password)
+
+	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		p.Logger.Error("Error in client.Do: " + err.Error())
+		errorText := "Error in client.Do: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
 	}
 
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		p.Logger.Error("Error in io.ReadAll: " + err.Error())
+		errorText := "Error in io.ReadAll: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
 	}
 
 	p.Logger.Debug(string(body))
+	if strings.Contains(string(body), "<html>") {
+		errorText := "Service Now API server is down"
+		p.Logger.Error(errorText)
+		panic(errorText)
+	}
 
 	return body
 }
@@ -208,15 +204,23 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 	var cmdbResults cmdb_results_snow_type
 	err := json.Unmarshal(response, &cmdbResults)
 	if err != nil {
-		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
+		errorText := "Error in json.Unmarshal: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
 	}
 
-	p.Logger.Debug("InstallStatus: "+cmdbResults.Result[0].InstallStatus+", CI name: "+cmdbResults.Result[0].Name)
+	if len(cmdbResults.Result) == 0 {
+		errorText := fmt.Sprintf("No CI with name %s found", ciName)
+		p.Logger.Error(errorText)
+		panic(errorText)
+	}
+
+	p.Logger.Debug("InstallStatus: " + cmdbResults.Result[0].InstallStatus + ", CI name: " + cmdbResults.Result[0].Name)
 
 	return cmdbResults.Result[0]
 }
 
-func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) ([]*change_snow_type, int) {
+func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) ([]change_snow_type, int) {
 
 	apiCall := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=%d&sysparm_offset=%d", snowUrl, ciName, sysparm_limit, sysparm_offset)
 	response := p.getFromSNOWAPI(username, password, apiCall)
@@ -224,19 +228,29 @@ func (p *ServiceNowPlugin) getChanges(username string, password string, ciName s
 	var changeResults change_results_snow_type
 	err := json.Unmarshal(response, &changeResults)
 	if err != nil {
-		p.Logger.Error("Error in json.Unmarshal: " + err.Error())
+		errorText := "Error in json.Unmarshal: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
 	}
 
-	return changeResults.Result, sysparm_offset+len(changeResults.Result)
+	if len(changeResults.Result) == 0 {
+		errorText := "No changes found"
+		p.Logger.Error(errorText)
+		panic(errorText)
+	}
+
+	return changeResults.Result, sysparm_offset + len(changeResults.Result)
 }
 
-func (p *ServiceNowPlugin) convertTime(timestring string) (time.Time) {
-	goTimeString := strings.Replace(timestring," ","T",-1)+"Z"
+func (p *ServiceNowPlugin) convertTime(timestring string) time.Time {
+	goTimeString := strings.Replace(timestring, " ", "T", -1) + "Z"
 
 	var goTime time.Time
 	err := goTime.UnmarshalText([]byte(goTimeString))
 	if err != nil {
-		p.Logger.Debug("Error in converting "+timestring+" to go Time: "+err.Error())
+		errorText := "Error in converting " + timestring + " to go Time: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
 	}
 	return goTime
 }
@@ -245,11 +259,11 @@ func (p *ServiceNowPlugin) parseChange(changeSnow change_snow_type) change_type 
 	var change change_type
 
 	p.Logger.Debug(fmt.Sprintf("Change: Type: %s, Short description: %s, Start Date: %s, End Date: %s",
-				   changeSnow.Type, 
-				   changeSnow.ShortDescription, 
-				   changeSnow.StartDate, 
-				   changeSnow.EndDate))
-	
+		changeSnow.Type,
+		changeSnow.ShortDescription,
+		changeSnow.StartDate,
+		changeSnow.EndDate))
+
 	change.Type = changeSnow.Type
 	change.Number = changeSnow.Number
 	change.State = changeSnow.State
@@ -268,11 +282,11 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_snow_type) string {
 	installStatus := CI.InstallStatus
 	ciName := CI.Name
 
-	validInstallStatus := []string {
-		"1",            // Installed
-		"3",			// In maintenance
-		"4", 			// Pending install
-		"5",			// Pending repair
+	validInstallStatus := []string{
+		"1", // Installed
+		"3", // In maintenance
+		"4", // Pending install
+		"5", // Pending repair
 	}
 
 	if !slices.Contains(validInstallStatus, installStatus) {
@@ -289,14 +303,14 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 
 	currentTime := time.Now()
 
-    if change.EndDate.Before(currentTime) ||
-	   change.StartDate.After(currentTime) {
+	if change.EndDate.Before(currentTime) ||
+		change.StartDate.After(currentTime) {
 		errorText = fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s (current date: %s)",
-	                             change.Number, 
-								 change.ShortDescription, 
-								 p.getLocalTime(change.StartDate), 
-								 p.getLocalTime(change.EndDate), 
-								 p.getLocalTime(currentTime))
+			change.Number,
+			change.ShortDescription,
+			p.getLocalTime(change.StartDate),
+			p.getLocalTime(change.EndDate),
+			p.getLocalTime(currentTime))
 		p.Logger.Debug(errorText)
 	} else {
 		remainingTime = change.EndDate.Sub(time.Now())
@@ -315,48 +329,48 @@ func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, err
 func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
 	loc, _ := time.LoadLocation(timezone)
 
-	return fmt.Sprintf("%02d:%02d:%02d", 
-						t.In(loc).Hour(),
-						t.In(loc).Minute(),
-						t.In(loc).Second())
+	return fmt.Sprintf("%02d:%02d:%02d",
+		t.In(loc).Hour(),
+		t.In(loc).Minute(),
+		t.In(loc).Second())
 }
 
 // https://dev.to/narasimha1997/create-kubernetes-jobs-in-golang-using-k8s-client-go-api-59ej
 func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName string, jobStartTime time.Time) {
 	p.Logger.Debug(fmt.Sprintf("createAbortJob: %s, %s", namespace, accessrequestName))
-	jobName := strings.Replace("stop-"+accessrequestName,".","-",-1)
+	jobName := strings.Replace("stop-"+accessrequestName, ".", "-", -1)
 	cmd := fmt.Sprintf("curl --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt --header \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" -X DELETE https://kubernetes.default.svc.cluster.local/apis/ephemeral-access.argoproj-labs.io/v1alpha1/namespaces/argocd/accessrequests/%s", accessrequestName)
 	cronjobs := k8sclientset.BatchV1().CronJobs(namespace)
-    var backOffLimit int32 = 0
+	var backOffLimit int32 = 0
 
-    // jobSpec := &batchv1.Job{
-    //     ObjectMeta: metav1.ObjectMeta{
-    //         Name:      jobName,
-    //         Namespace: namespace,
-    //     },
-    //     Spec: batchv1.JobSpec{
-    //         Template: v1.PodTemplateSpec{
-    //             Spec: v1.PodSpec{
+	// jobSpec := &batchv1.Job{
+	//     ObjectMeta: metav1.ObjectMeta{
+	//         Name:      jobName,
+	//         Namespace: namespace,
+	//     },
+	//     Spec: batchv1.JobSpec{
+	//         Template: v1.PodTemplateSpec{
+	//             Spec: v1.PodSpec{
 	// 				ServiceAccountName: "remove-accessrequest-job-sa",
-    //                 Containers: []v1.Container{
-    //                     {
-    //                         Name:    jobName,
-    //                         Image:   "curlimages/curl:latest",
-    //                         Command: strings.Split(cmd, " "),
-    //                     },
-    //                 },
-    //                 RestartPolicy: v1.RestartPolicyNever,
-    //             },
-    //         },
-    //         BackoffLimit: &backOffLimit,
-    //     },
-    // }
+	//                 Containers: []v1.Container{
+	//                     {
+	//                         Name:    jobName,
+	//                         Image:   "curlimages/curl:latest",
+	//                         Command: strings.Split(cmd, " "),
+	//                     },
+	//                 },
+	//                 RestartPolicy: v1.RestartPolicyNever,
+	//             },
+	//         },
+	//         BackoffLimit: &backOffLimit,
+	//     },
+	// }
 	cronJobSpec := &batchv1.CronJob{
-        ObjectMeta: metav1.ObjectMeta{
-            Name:      jobName,
-            Namespace: namespace,
-        },
-        Spec: batchv1.CronJobSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: namespace,
+		},
+		Spec: batchv1.CronJobSpec{
 			Schedule: fmt.Sprintf("%d %d %d %d *", jobStartTime.Minute(), jobStartTime.Hour(), jobStartTime.Day(), jobStartTime.Month()),
 			JobTemplate: batchv1.JobTemplateSpec{
 				Spec: batchv1.JobSpec{
@@ -373,17 +387,17 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
 							RestartPolicy: v1.RestartPolicyNever,
 						},
 					},
-	  			    BackoffLimit: &backOffLimit,
+					BackoffLimit: &backOffLimit,
 				},
 			},
 		},
 	}
 
-    _, err := cronjobs.Create(context.TODO(), cronJobSpec, metav1.CreateOptions{})
-    if err != nil {
-        p.Logger.Error(fmt.Sprintf("Failed to create K8s job %s in namespace %s: %s.", jobName, namespace, err.Error()))
-    } else {
-	    p.Logger.Info(fmt.Sprintf("Created K8s job %s successfully in namespace %s", jobName, namespace))
+	_, err := cronjobs.Create(context.TODO(), cronJobSpec, metav1.CreateOptions{})
+	if err != nil {
+		p.Logger.Error(fmt.Sprintf("Failed to create K8s job %s in namespace %s: %s.", jobName, namespace, err.Error()))
+	} else {
+		p.Logger.Info(fmt.Sprintf("Created K8s job %s successfully in namespace %s", jobName, namespace))
 	}
 }
 
@@ -397,15 +411,19 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	arName := ar.ObjectMeta.Name
 	arDuration := ar.Spec.Duration.Duration
 
-	sysparm_offset := 0 
+	sysparm_offset := 0
 
-	p.getSnowUrl()
-	p.getTimezone()
+	snowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "No Service Now URL given (environment variable SERVICE_NOW_URL is empty)")
+	if snowUrl == "" {
+		return p.DenyAccess("No environment variable SERVICE_NOW_URL found, cannot find SNOW API")
+	}
+
+	timezone = p.getEnvVarWithDefault("TIMEZONE", "UTC")
 	p.getK8sConfig()
 
 	username, password := p.getSNOWCredentials()
 
-	ciLabel := p.getCILabel()
+	ciLabel := p.getEnvVarWithDefault("CI_LABEL", "ci_name")
 	ciName := p.getCIName(app, ciLabel)
 	if ciName == "\"\"" {
 		application := ar.Spec.Application.Name
@@ -416,7 +434,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	CI := p.getCI(username, password, ciName)
 	errorString := p.checkCI(CI)
 	if errorString != "" {
-		p.Logger.Error("Access Denied for "+requesterName+" : "+errorString)
+		p.Logger.Error("Access Denied for " + requesterName + " : " + errorString)
 		return p.DenyAccess(errorString)
 	}
 
@@ -425,9 +443,9 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	var changeRemainingTime time.Duration = 0
 	var remainingTime time.Duration = 0
 	errorString = ""
-	for true {
+	for {
 		for _, snowChange := range snowChanges {
-			change := p.parseChange(*snowChange)
+			change := p.parseChange(snowChange)
 			errorString, remainingTime = p.checkChange(change)
 			if errorString == "" {
 				validChange = &change
@@ -441,27 +459,27 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 			snowChanges, sysparm_offset = p.getChanges(username, password, ciName, sysparm_offset)
 		}
 	}
-	
-	if validChange != nil {		
-    	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s, from %s to %s", 
-		                                 requesterName, 
-										 validChange.Type, 
-										 validChange.Number, 
-										 validChange.ShortDescription,
-										 requestedRole,
-										 p.getLocalTime(time.Now()),
-										 p.getLocalTime(validChange.EndDate))
+
+	if validChange != nil {
+		grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s, from %s to %s",
+			requesterName,
+			validChange.Type,
+			validChange.Number,
+			validChange.ShortDescription,
+			requestedRole,
+			p.getLocalTime(time.Now()),
+			p.getLocalTime(validChange.EndDate))
 		p.Logger.Info(grantedAccessText)
 	} else {
 		p.Logger.Error(fmt.Sprintf("Access Denied for %s, role %s: %s", requesterName, requestedRole, errorString))
 		return p.DenyAccess(errorString)
-	} 
-	
+	}
+
 	// Set duration to the time left for this (valid) change, unless original request was
 	// shorter (otherwise the ephemeral access extension itself will abort the accessrequest)
 	var endLocalDateString string
 
-	if arDuration > changeRemainingTime {  
+	if arDuration > changeRemainingTime {
 		ar.Spec.Duration.Duration = changeRemainingTime
 		endLocalDateString = p.getLocalTime(validChange.EndDate)
 		p.createAbortJob(namespace, arName, validChange.EndDate)
@@ -475,15 +493,15 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	jsonAr, _ := json.Marshal(ar)
 	p.Logger.Debug(string(jsonAr))
 
-	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__", 
-										validChange.Number, 
-										validChange.ShortDescription, 
-										endLocalDateString, 
-										changeRemainingTime.Truncate(time.Second).String())
+	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__",
+		validChange.Number,
+		validChange.ShortDescription,
+		endLocalDateString,
+		changeRemainingTime.Truncate(time.Second).String())
 
 	p.Logger.Debug(grantedAccessTextUI)
 	return &plugin.GrantResponse{
-		Status: plugin.GrantStatusGranted,
+		Status:  plugin.GrantStatusGranted,
 		Message: grantedAccessTextUI,
 	}, nil
 }
