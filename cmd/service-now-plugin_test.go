@@ -19,6 +19,7 @@ import (
 
 	argocd "github.com/argoproj-labs/argocd-ephemeral-access/api/argoproj/v1alpha1"
 	api "github.com/argoproj-labs/argocd-ephemeral-access/api/ephemeral-access/v1alpha1"
+	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/plugin"
 
 	coreV1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -342,7 +343,7 @@ func TestGetSNOWCredentials(t *testing.T) {
 	loggerObj.AssertExpectations(t)
 }
 
-func simulateHttpRequestToSNOW(t *testing.T, username string, password string, requestURI string, response string) *httptest.Server {
+func simulateSimpleHttpRequestToSNOW(t *testing.T, username string, password string, requestURI string, response string) *httptest.Server {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.RequestURI() != requestURI {
@@ -381,7 +382,7 @@ func TestGetFromSNOWAPIErrorInApiCall(t *testing.T) {
 	username := "testUser"
 	password := "testPassword"
 	requestURI := "/api/test"
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	apiCall := fmt.Sprintf("%s%s%s", server.URL, server.URL, requestURI)
@@ -408,7 +409,7 @@ func TestGetFromSNOWAPIServerDown(t *testing.T) {
 	username := "testUser"
 	password := "testPassword"
 	requestURI := "/api/test"
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
@@ -427,7 +428,7 @@ func TestGetFromSNOWAPINormalResponse(t *testing.T) {
 	username := "testUser"
 	password := "testPassword"
 	requestURI := "/api/test"
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
@@ -456,7 +457,7 @@ func TestGetCIServerDown(t *testing.T) {
 	password := "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
 
@@ -487,7 +488,7 @@ func TestGetCINoJSON(t *testing.T) {
 	password := "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -518,7 +519,7 @@ func TestGetCINoCI(t *testing.T) {
 	password := "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -534,13 +535,13 @@ func TestGetCINoCI(t *testing.T) {
 
 func TestGetCIOneCI(t *testing.T) {
 	p, loggerObj := testGetP()
-	responseText := "{\"result\":[{\"install_status\":\"1\", \"name\":\"app-demoapp\"}]}"
+	responseText := `{"result":[{"install_status":"1", "name":"app-demoapp"}]}`
 
 	username := "testUser"
 	password := "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -564,7 +565,7 @@ func TestGetCITwoCIs(t *testing.T) {
 	password := "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -597,7 +598,7 @@ func TestGetChangeServerDown(t *testing.T) {
 	password := "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
 
@@ -628,7 +629,7 @@ func TestGetChangeNoJSON(t *testing.T) {
 	password := "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -659,7 +660,7 @@ func TestGetChangeNoChange(t *testing.T) {
 	password := "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -681,7 +682,7 @@ func TestGetChangesOneChange(t *testing.T) {
 	password := "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -706,7 +707,7 @@ func TestGetChangesTwoChanges(t *testing.T) {
 	password := "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
-	server := simulateHttpRequestToSNOW(t, username, password, requestURI, responseText)
+	server := simulateSimpleHttpRequestToSNOW(t, username, password, requestURI, responseText)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -750,6 +751,343 @@ func TestConvertTimeIncorrectTime(t *testing.T) {
 	}()
 
 	_ = p.convertTime(timeString)
+}
+
+func TestParseChange(t *testing.T) {
+	p, loggerObj := testGetP()
+
+	var change_snow = change_snow_type{
+		Type:             "1",
+		Number:           "CHG12345",
+		State:            -1.0,
+		Phase:            "1",
+		CMDBCi:           "app-demoapp",
+		Active:           "1",
+		EndDate:          "2025-05-16 23:59:59",
+		ShortDescription: "Test",
+		StartDate:        "2025-05-16 08:00:00",
+		Approval:         "1",
+	}
+
+	loggerObj.On("Debug", fmt.Sprintf("Change: Type: %s, Short description: %s, Start Date: %s, End Date: %s",
+		change_snow.Type,
+		change_snow.ShortDescription,
+		change_snow.StartDate,
+		change_snow.EndDate))
+
+	chg := p.parseChange(change_snow)
+
+	assert.Equal(t, change_snow.Type, chg.Type, "Change type should be the same")
+	assert.Equal(t, change_snow.Number, chg.Number, "Change number should be the same")
+	assert.Equal(t, change_snow.State, chg.State, "Change state should be the same")
+	assert.Equal(t, change_snow.Phase, chg.Phase, "Change phase should be the same")
+	assert.Equal(t, change_snow.CMDBCi, chg.CMDBCi, "Change CI should be the same")
+	assert.Equal(t, change_snow.Active, chg.Active, "Change active state should be the same")
+	assert.Equal(t, time.Date(2025, 05, 16, 23, 59, 59, 0, time.UTC), chg.EndDate, "Change end date should be the same")
+	assert.Equal(t, change_snow.ShortDescription, chg.ShortDescription, "Change short description should be the same")
+	assert.Equal(t, time.Date(2025, 05, 16, 8, 0, 0, 0, time.UTC), chg.StartDate, "Change start date should be the same")
+	assert.Equal(t, change_snow.Approval, chg.Approval, "Change approval state should be the same")
+}
+
+func TestCheckCIInstalled(t *testing.T) {
+	p, _ := testGetP()
+
+	var ci = cmdb_snow_type{
+		InstallStatus: "1", // Installed
+		Name:          "whatever",
+	}
+
+	checkString := p.checkCI(ci)
+	assert.Equal(t, "", checkString, "Installed state should be accepted")
+}
+
+func TestCheckCIInMaintenance(t *testing.T) {
+	p, _ := testGetP()
+
+	var ci = cmdb_snow_type{
+		InstallStatus: "3", // In maintenance
+		Name:          "whatever",
+	}
+
+	checkString := p.checkCI(ci)
+	assert.Equal(t, "", checkString, "In maintenance state should be accepted")
+}
+
+func TestCheckCIPendingInstall(t *testing.T) {
+	p, _ := testGetP()
+
+	var ci = cmdb_snow_type{
+		InstallStatus: "4", // Pending Install
+		Name:          "whatever",
+	}
+
+	checkString := p.checkCI(ci)
+	assert.Equal(t, "", checkString, "Pending install state should be accepted")
+}
+
+func TestCheckCIPendingRepair(t *testing.T) {
+	p, _ := testGetP()
+
+	var ci = cmdb_snow_type{
+		InstallStatus: "5", // Pending Repair
+		Name:          "whatever",
+	}
+
+	checkString := p.checkCI(ci)
+	assert.Equal(t, "", checkString, "Pending repair state should be accepted")
+}
+
+func TestCheckCIState0(t *testing.T) {
+	p, _ := testGetP()
+
+	var ci = cmdb_snow_type{
+		InstallStatus: "0", // Whatever
+		Name:          "whatever",
+	}
+
+	checkString := p.checkCI(ci)
+	assert.Equal(t, "Invalid install status (0) for CI whatever", checkString, "Other states should not be accepted")
+}
+
+func TestCheckCIState2(t *testing.T) {
+	p, _ := testGetP()
+
+	var ci = cmdb_snow_type{
+		InstallStatus: "2", // Whatever
+		Name:          "whatever",
+	}
+
+	checkString := p.checkCI(ci)
+	assert.Equal(t, "Invalid install status (2) for CI whatever", checkString, "Other states should not be accepted")
+}
+
+func TestCheckCIState6(t *testing.T) {
+	p, _ := testGetP()
+
+	var ci = cmdb_snow_type{
+		InstallStatus: "6", // Whatever
+		Name:          "whatever",
+	}
+
+	checkString := p.checkCI(ci)
+	assert.Equal(t, "Invalid install status (6) for CI whatever", checkString, "Other states should not be accepted")
+}
+
+func TestCheckChangeTooEarly(t *testing.T) {
+	p, loggerObj := testGetP()
+
+	timezone = "UTC"
+	currentTime := time.Now()
+	startDate := currentTime.Add(time.Hour)
+	endDate := currentTime.Add(time.Hour * 2)
+
+	var change = change_type{
+		Type:             "1",
+		Number:           "CHG12345",
+		State:            -1.0,
+		Phase:            "1",
+		CMDBCi:           "app-demoapp",
+		Active:           "1",
+		EndDate:          endDate,
+		ShortDescription: "Test",
+		StartDate:        startDate,
+		Approval:         "1",
+	}
+
+	expectedErrorText := fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s (current date: %s)",
+		change.Number,
+		change.ShortDescription,
+		p.getLocalTime(change.StartDate),
+		p.getLocalTime(change.EndDate),
+		p.getLocalTime(currentTime))
+	loggerObj.On("Debug", expectedErrorText)
+
+	checkString, _ := p.checkChange(change)
+
+	assert.Equal(t, expectedErrorText, checkString, "Change that is started too early should not be accepted")
+	loggerObj.AssertExpectations(t)
+}
+
+func TestCheckChangeCorrectTime(t *testing.T) {
+	p, loggerObj := testGetP()
+
+	timezone = "UTC"
+	currentTime := time.Now()
+	startDate := currentTime.Add(-5 * time.Minute)
+	endDate := currentTime.Add(time.Hour * 2)
+
+	var change = change_type{
+		Type:             "1",
+		Number:           "CHG12345",
+		State:            -1.0,
+		Phase:            "1",
+		CMDBCi:           "app-demoapp",
+		Active:           "1",
+		EndDate:          endDate,
+		ShortDescription: "Test",
+		StartDate:        startDate,
+		Approval:         "1",
+	}
+
+	expectedErrorText := ""
+
+	checkString, remainingTime := p.checkChange(change)
+
+	assert.Equal(t, expectedErrorText, checkString, "Change that is started between start date and end date should be accepted")
+	assert.Equal(t, time.Duration(time.Hour*2), remainingTime, "Remaining time should be correct")
+	loggerObj.AssertExpectations(t)
+}
+
+func TestCheckChangeTooLate(t *testing.T) {
+	p, loggerObj := testGetP()
+
+	timezone = "UTC"
+	currentTime := time.Now()
+	startDate := currentTime.Add(-2 * time.Hour)
+	endDate := currentTime.Add(-1 * time.Hour)
+
+	var change = change_type{
+		Type:             "1",
+		Number:           "CHG12345",
+		State:            -1.0,
+		Phase:            "1",
+		CMDBCi:           "app-demoapp",
+		Active:           "1",
+		EndDate:          endDate,
+		ShortDescription: "Test",
+		StartDate:        startDate,
+		Approval:         "1",
+	}
+
+	expectedErrorText := fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s (current date: %s)",
+		change.Number,
+		change.ShortDescription,
+		p.getLocalTime(change.StartDate),
+		p.getLocalTime(change.EndDate),
+		p.getLocalTime(currentTime))
+	loggerObj.On("Debug", expectedErrorText)
+
+	checkString, _ := p.checkChange(change)
+
+	assert.Equal(t, expectedErrorText, checkString, "Change that is started too early should not be accepted")
+	loggerObj.AssertExpectations(t)
+}
+
+func TestDenyAccess(t *testing.T) {
+	p, loggerObj := testGetP()
+
+	reason := "whatever"
+	response, err := p.denyAccess(reason)
+
+	assert.Equal(t, plugin.GrantStatusDenied, response.Status, response, "Access request should be denied")
+	assert.Equal(t, reason, response.Message, response, "Reason should be correct")
+	assert.Equal(t, nil, err, "No error")
+	loggerObj.AssertExpectations(t)
+}
+
+func TestGetLocalTime(t *testing.T) {
+	p, loggerObj := testGetP()
+
+	time.Local = time.UTC
+	currentTime := time.Now()
+	timezone = "Europe/Amsterdam"
+	currentTimeAmsterdamSummertime := time.Now().Add(2 * time.Hour)
+	currentTimeAmsterdamWintertime := time.Now().Add(1 * time.Hour)
+
+	currentTimeAmsterdamSummertimeString := fmt.Sprintf("%02d:%02d:%02d",
+		currentTimeAmsterdamSummertime.Hour(),
+		currentTimeAmsterdamSummertime.Minute(),
+		currentTimeAmsterdamSummertime.Second())
+	currentTimeAmsterdamWintertimeString := fmt.Sprintf("%02d:%02d:%02d",
+		currentTimeAmsterdamWintertime.Hour(),
+		currentTimeAmsterdamWintertime.Minute(),
+		currentTimeAmsterdamWintertime.Second())
+
+	currentTimeString := p.getLocalTime(currentTime)
+
+	if currentTimeString != currentTimeAmsterdamSummertimeString &&
+		currentTimeString != currentTimeAmsterdamWintertimeString {
+		t.Errorf("Error: %s is not equal to Amsterdam Summertime (%s) or Amsterdam Wintertime (%s)",
+			currentTimeString,
+			currentTimeAmsterdamSummertimeString,
+			currentTimeAmsterdamWintertimeString)
+	}
+
+	loggerObj.AssertExpectations(t)
+}
+
+func simulateGlobalHttpRequestToSNOW(startDateString string, endDateString string) *httptest.Server {
+
+	var response string
+
+	time.Local = time.UTC
+	timezone = "UTC"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("RequestURI: %s", r.URL.RequestURI())
+		if r.URL.RequestURI() == "/api/now/table/cmdb_ci?name=app-demoapp&sysparm_fields=install_status,name" {
+			response = `{"result": [{"install_status": "1", "name": "demoapp"}]}`
+		}
+		if r.URL.RequestURI() == "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0" {
+			response = fmt.Sprintf(`{"result":[{"type":"1", "number":"CHG300030", "short_description":"valid change", "start_date":"%s", "end_date":"%s"}]}`, startDateString, endDateString)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(response))
+	}))
+	return server
+}
+
+func TestGrantAccess(t *testing.T) {
+	p, loggerObj := testGetP()
+
+	unittest = true // don't initialize k8sconfig/k8sclientset
+
+	var ar api.AccessRequest
+	var requestedRole api.TargetRole
+	var app argocd.Application
+
+	requestedRole.TemplateRef.Name = "administrator"
+
+	ar.Spec.Subject.Username = "Test User"
+	ar.Spec.Role = requestedRole
+	ar.Spec.Application.Namespace = "argocd"
+	ar.Spec.Application.Name = "demoapp"
+	ar.Spec.Duration.Duration = 4 * time.Hour
+
+	app.ObjectMeta.Name = "demoapp"
+
+	var m map[string]string = make(map[string]string)
+	m["ci_name"] = "app-demoapp"
+	app.ObjectMeta.Labels = m
+
+	os.Setenv("TIMEZONE", "UTC")
+	currentTime := time.Now()
+	startDate := currentTime.Add(-5 * time.Minute)
+	endDate := currentTime.Add(2 * time.Hour)
+	startDateString := fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", startDate.Year(), startDate.Month(), startDate.Day(), startDate.Hour(), startDate.Minute(), startDate.Second())
+	endDateString := fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", endDate.Year(), endDate.Month(), endDate.Day(), endDate.Hour(), endDate.Minute(), endDate.Second())
+
+	loggerObj.On("Debug", mock.Anything)
+	loggerObj.On("Info", mock.Anything)
+
+	server := simulateGlobalHttpRequestToSNOW(startDateString, endDateString)
+	os.Setenv("SERVICE_NOW_URL", server.URL)
+
+	secretName := "snow-secret"
+	namespace := "argocd-ephemeral-access"
+	genericUsername := "SNOWUsername"
+	genericPassword := "SNOWPassword"
+
+	setCredentialsSecret(namespace, secretName, genericUsername, genericPassword)
+
+	response, err := p.GrantAccess(&ar, &app)
+
+	assert.Equal(t, plugin.GrantStatusGranted, response.Status, "Status should be granted")
+	assert.Equal(t, nil, err, "Error should be nil")
+	if !strings.Contains(response.Message, "Granted access") {
+		t.Errorf("%s should contain text Granted access", response.Message)
+	}
 }
 
 // func TestGetFromSNOWAPINoSnowURL(t *testing.T) {

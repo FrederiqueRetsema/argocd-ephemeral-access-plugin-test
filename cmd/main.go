@@ -32,16 +32,16 @@ type ServiceNowPlugin struct {
 	Logger hclog.Logger
 }
 
-type cmdb_snow_type *struct {
+type cmdb_snow_type struct {
 	InstallStatus string `json:"install_status"`
 	Name          string `json:"name"`
 }
 
 type cmdb_results_snow_type struct {
-	Result []cmdb_snow_type `json:"result"`
+	Result []*cmdb_snow_type `json:"result"`
 }
 
-type change_snow_type *struct {
+type change_snow_type struct {
 	Type             string  `json:"type"`
 	Number           string  `json:"number"`
 	State            float64 `json:"state"`
@@ -68,10 +68,12 @@ type change_type struct {
 }
 
 type change_results_snow_type struct {
-	Result []change_snow_type `json:"result"`
+	Result []*change_snow_type `json:"result"`
 }
 
 const sysparm_limit = 5
+
+var unittest = false
 
 var snowUrl string
 var timezone string
@@ -103,14 +105,17 @@ func (p *ServiceNowPlugin) getEnvVarWithDefault(envVarName string, envVarDefault
 
 func (p *ServiceNowPlugin) getK8sConfig() {
 	var err error
-	k8sconfig, err = rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
 
-	k8sclientset, err = kubernetes.NewForConfig(k8sconfig)
-	if err != nil {
-		panic(err.Error())
+	if !unittest {
+		k8sconfig, err = rest.InClusterConfig()
+		if err != nil {
+			panic(err.Error())
+		}
+
+		k8sclientset, err = kubernetes.NewForConfig(k8sconfig)
+		if err != nil {
+			panic(err.Error())
+		}
 	}
 }
 
@@ -196,7 +201,7 @@ func (p *ServiceNowPlugin) getFromSNOWAPI(username string, password string, apiC
 	return body
 }
 
-func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) cmdb_snow_type {
+func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) *cmdb_snow_type {
 
 	apiCall := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
 	response := p.getFromSNOWAPI(username, password, apiCall)
@@ -220,7 +225,7 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 	return cmdbResults.Result[0]
 }
 
-func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) ([]change_snow_type, int) {
+func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) ([]*change_snow_type, int) {
 
 	apiCall := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=%d&sysparm_offset=%d", snowUrl, ciName, sysparm_limit, sysparm_offset)
 	response := p.getFromSNOWAPI(username, password, apiCall)
@@ -267,6 +272,7 @@ func (p *ServiceNowPlugin) parseChange(changeSnow change_snow_type) change_type 
 	change.Type = changeSnow.Type
 	change.Number = changeSnow.Number
 	change.State = changeSnow.State
+	change.Phase = changeSnow.Phase
 	change.CMDBCi = changeSnow.CMDBCi
 	change.Active = changeSnow.Active
 	change.Approval = changeSnow.Approval
@@ -319,7 +325,7 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 	return errorText, remainingTime
 }
 
-func (p *ServiceNowPlugin) DenyAccess(reason string) (*plugin.GrantResponse, error) {
+func (p *ServiceNowPlugin) denyAccess(reason string) (*plugin.GrantResponse, error) {
 	return &plugin.GrantResponse{
 		Status:  plugin.GrantStatusDenied,
 		Message: reason,
@@ -343,28 +349,6 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
 	cronjobs := k8sclientset.BatchV1().CronJobs(namespace)
 	var backOffLimit int32 = 0
 
-	// jobSpec := &batchv1.Job{
-	//     ObjectMeta: metav1.ObjectMeta{
-	//         Name:      jobName,
-	//         Namespace: namespace,
-	//     },
-	//     Spec: batchv1.JobSpec{
-	//         Template: v1.PodTemplateSpec{
-	//             Spec: v1.PodSpec{
-	// 				ServiceAccountName: "remove-accessrequest-job-sa",
-	//                 Containers: []v1.Container{
-	//                     {
-	//                         Name:    jobName,
-	//                         Image:   "curlimages/curl:latest",
-	//                         Command: strings.Split(cmd, " "),
-	//                     },
-	//                 },
-	//                 RestartPolicy: v1.RestartPolicyNever,
-	//             },
-	//         },
-	//         BackoffLimit: &backOffLimit,
-	//     },
-	// }
 	cronJobSpec := &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -415,7 +399,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 	snowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "No Service Now URL given (environment variable SERVICE_NOW_URL is empty)")
 	if snowUrl == "" {
-		return p.DenyAccess("No environment variable SERVICE_NOW_URL found, cannot find SNOW API")
+		return p.denyAccess("No environment variable SERVICE_NOW_URL found, cannot find SNOW API")
 	}
 
 	timezone = p.getEnvVarWithDefault("TIMEZONE", "UTC")
@@ -427,15 +411,15 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	ciName := p.getCIName(app, ciLabel)
 	if ciName == "\"\"" {
 		application := ar.Spec.Application.Name
-		return p.DenyAccess("No label " + ciLabel + " in app " + application)
+		return p.denyAccess("No label " + ciLabel + " in app " + application)
 	}
 	p.Logger.Debug("Search for " + ciName + " in the CMDB...")
 
 	CI := p.getCI(username, password, ciName)
-	errorString := p.checkCI(CI)
+	errorString := p.checkCI(*CI)
 	if errorString != "" {
 		p.Logger.Error("Access Denied for " + requesterName + " : " + errorString)
-		return p.DenyAccess(errorString)
+		return p.denyAccess(errorString)
 	}
 
 	snowChanges, sysparm_offset := p.getChanges(username, password, ciName, sysparm_offset)
@@ -445,7 +429,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	errorString = ""
 	for {
 		for _, snowChange := range snowChanges {
-			change := p.parseChange(snowChange)
+			change := p.parseChange(*snowChange)
 			errorString, remainingTime = p.checkChange(change)
 			if errorString == "" {
 				validChange = &change
@@ -472,7 +456,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		p.Logger.Info(grantedAccessText)
 	} else {
 		p.Logger.Error(fmt.Sprintf("Access Denied for %s, role %s: %s", requesterName, requestedRole, errorString))
-		return p.DenyAccess(errorString)
+		return p.denyAccess(errorString)
 	}
 
 	// Set duration to the time left for this (valid) change, unless original request was
@@ -490,8 +474,8 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		endLocalDateString = p.getLocalTime(endDateTime)
 	}
 
-	jsonAr, _ := json.Marshal(ar)
-	p.Logger.Debug(string(jsonAr))
+	// jsonAr, _ := json.Marshal(ar)
+	// p.Logger.Debug(string(jsonAr))
 
 	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__",
 		validChange.Number,
