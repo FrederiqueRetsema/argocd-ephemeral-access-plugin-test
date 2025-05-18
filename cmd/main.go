@@ -76,14 +76,12 @@ const sysparm_limit = 5
 var unittest = false
 
 var snowUrl string
+var snowUsername string
+var snowPassword string
+var ciLabel string
 var timezone string
 var k8sconfig *rest.Config
 var k8sclientset kubernetes.Interface
-
-func (p *ServiceNowPlugin) Init() error {
-	p.Logger.Debug("This is a call to the Init method")
-	return nil
-}
 
 func (p *ServiceNowPlugin) getEnvVarWithPanic(envVarName string, panicText string) string {
 	returnValue := os.Getenv(envVarName)
@@ -103,6 +101,28 @@ func (p *ServiceNowPlugin) getEnvVarWithDefault(envVarName string, envVarDefault
 	return returnValue
 }
 
+func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
+	loc, _ := time.LoadLocation(timezone)
+
+	return fmt.Sprintf("%02d:%02d:%02d",
+		t.In(loc).Hour(),
+		t.In(loc).Minute(),
+		t.In(loc).Second())
+}
+
+func (p *ServiceNowPlugin) convertTime(timestring string) time.Time {
+	goTimeString := strings.Replace(timestring, " ", "T", -1) + "Z"
+
+	var goTime time.Time
+	err := goTime.UnmarshalText([]byte(goTimeString))
+	if err != nil {
+		errorText := "Error in converting " + timestring + " to go Time: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
+	}
+	return goTime
+}
+
 func (p *ServiceNowPlugin) getK8sConfig() {
 	var err error
 
@@ -119,29 +139,6 @@ func (p *ServiceNowPlugin) getK8sConfig() {
 	}
 }
 
-func (p *ServiceNowPlugin) getCIName(app *argocd.Application, ciLabel string) string {
-	ciName := string(app.ObjectMeta.Labels[ciLabel])
-	p.Logger.Debug(fmt.Sprintf("ciLabel %s found: %s", ciLabel, ciName))
-
-	return ciName
-}
-
-func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
-	username := ar.Spec.Subject.Username
-	role := ar.Spec.Role.TemplateRef.Name
-	namespace := ar.Spec.Application.Namespace
-	application := ar.Spec.Application.Name
-	duration := ar.Spec.Duration.Duration.String()
-
-	infoText := fmt.Sprintf("Call to GrantAccess: username: %s, role: %s, application: [%s]%s, duration: %s", username, role, namespace, application, duration)
-	p.Logger.Info(infoText)
-
-	jsonAr, _ := json.Marshal(ar)
-	jsonApp, _ := json.Marshal(app)
-	p.Logger.Debug("jsonAr: " + string(jsonAr))
-	p.Logger.Debug("jsonApp: " + string(jsonApp))
-}
-
 func (p *ServiceNowPlugin) getCredentialsFromSecret(namespace string, secretName string, usernameKey string, passwordKey string) (string, string) {
 	p.Logger.Debug(fmt.Sprintf("Get credentials from secret [%s]%s...", namespace, secretName))
 
@@ -154,6 +151,37 @@ func (p *ServiceNowPlugin) getCredentialsFromSecret(namespace string, secretName
 	return string(secret.Data[usernameKey]), string(secret.Data[passwordKey])
 }
 
+func (p *ServiceNowPlugin) getCIName(app *argocd.Application) string {
+	p.Logger.Debug("Search for " + ciLabel + " in the CMDB...")
+	ciName := string(app.ObjectMeta.Labels[ciLabel])
+	p.Logger.Debug(fmt.Sprintf("ciLabel %s found: %s", ciLabel, ciName))
+
+	return ciName
+}
+
+func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
+	username := ar.Spec.Subject.Username
+	role := ar.Spec.Role.TemplateRef.Name
+	namespace := ar.Spec.Application.Namespace
+	applicationName := ar.Spec.Application.Name
+	duration := ar.Spec.Duration.Duration.String()
+
+	infoText := fmt.Sprintf("Call to GrantAccess: username: %s, role: %s, application: [%s]%s, duration: %s", username, role, namespace, applicationName, duration)
+	p.Logger.Info(infoText)
+
+	jsonAr, _ := json.Marshal(ar)
+	jsonApp, _ := json.Marshal(app)
+	p.Logger.Debug("jsonAr: " + string(jsonAr))
+	p.Logger.Debug("jsonApp: " + string(jsonApp))
+}
+
+func (p *ServiceNowPlugin) denyAccess(reason string) (*plugin.GrantResponse, error) {
+	return &plugin.GrantResponse{
+		Status:  plugin.GrantStatusDenied,
+		Message: reason,
+	}, nil
+}
+
 func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 	namespace := p.getEnvVarWithDefault("SECRET_NAMESPACE", "argocd-ephemeral-access")
 	secretName := p.getEnvVarWithDefault("SNOW_SECRET_NAME", "snow-secret")
@@ -161,7 +189,7 @@ func (p *ServiceNowPlugin) getSNOWCredentials() (string, string) {
 	return p.getCredentialsFromSecret(namespace, secretName, "username", "password")
 }
 
-func (p *ServiceNowPlugin) getFromSNOWAPI(username string, password string, apiCall string) []byte {
+func (p *ServiceNowPlugin) getFromSNOWAPI(apiCall string) []byte {
 	p.Logger.Debug("apiCall: " + apiCall)
 
 	req, err := http.NewRequest("GET", apiCall, nil)
@@ -172,7 +200,7 @@ func (p *ServiceNowPlugin) getFromSNOWAPI(username string, password string, apiC
 	}
 
 	req.Header.Add("Accept", "application/json")
-	req.SetBasicAuth(username, password)
+	req.SetBasicAuth(snowUsername, snowPassword)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -201,15 +229,24 @@ func (p *ServiceNowPlugin) getFromSNOWAPI(username string, password string, apiC
 	return body
 }
 
-func (p *ServiceNowPlugin) getCI(username string, password string, ciName string) *cmdb_snow_type {
+func (p *ServiceNowPlugin) getGlobalVars() {
+	snowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "No Service Now URL given (environment variable SERVICE_NOW_URL is empty)")
+	timezone = p.getEnvVarWithDefault("TIMEZONE", "UTC")
+	ciLabel = p.getEnvVarWithDefault("CI_LABEL", "ci_name")
+	p.getK8sConfig()
+
+	snowUsername, snowPassword = p.getSNOWCredentials()
+}
+
+func (p *ServiceNowPlugin) getCI(ciName string) *cmdb_snow_type {
 
 	apiCall := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
-	response := p.getFromSNOWAPI(username, password, apiCall)
+	response := p.getFromSNOWAPI(apiCall)
 
 	var cmdbResults cmdb_results_snow_type
 	err := json.Unmarshal(response, &cmdbResults)
 	if err != nil {
-		errorText := "Error in json.Unmarshal: " + err.Error()
+		errorText := fmt.Sprintf("Error in json.Unmarshal: %s (%s)", err.Error(), response)
 		p.Logger.Error(errorText)
 		panic(errorText)
 	}
@@ -225,15 +262,15 @@ func (p *ServiceNowPlugin) getCI(username string, password string, ciName string
 	return cmdbResults.Result[0]
 }
 
-func (p *ServiceNowPlugin) getChanges(username string, password string, ciName string, sysparm_offset int) ([]*change_snow_type, int) {
+func (p *ServiceNowPlugin) getChanges(ciName string, sysparm_offset int) ([]*change_snow_type, int) {
 
 	apiCall := fmt.Sprintf("%s/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=%d&sysparm_offset=%d", snowUrl, ciName, sysparm_limit, sysparm_offset)
-	response := p.getFromSNOWAPI(username, password, apiCall)
+	response := p.getFromSNOWAPI(apiCall)
 
 	var changeResults change_results_snow_type
 	err := json.Unmarshal(response, &changeResults)
 	if err != nil {
-		errorText := "Error in json.Unmarshal: " + err.Error()
+		errorText := fmt.Sprintf("Error in json.Unmarshal: %s (%s)", err.Error(), response)
 		p.Logger.Error(errorText)
 		panic(errorText)
 	}
@@ -245,19 +282,6 @@ func (p *ServiceNowPlugin) getChanges(username string, password string, ciName s
 	}
 
 	return changeResults.Result, sysparm_offset + len(changeResults.Result)
-}
-
-func (p *ServiceNowPlugin) convertTime(timestring string) time.Time {
-	goTimeString := strings.Replace(timestring, " ", "T", -1) + "Z"
-
-	var goTime time.Time
-	err := goTime.UnmarshalText([]byte(goTimeString))
-	if err != nil {
-		errorText := "Error in converting " + timestring + " to go Time: " + err.Error()
-		p.Logger.Error(errorText)
-		panic(errorText)
-	}
-	return goTime
 }
 
 func (p *ServiceNowPlugin) parseChange(changeSnow change_snow_type) change_type {
@@ -325,20 +349,40 @@ func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duratio
 	return errorText, remainingTime
 }
 
-func (p *ServiceNowPlugin) denyAccess(reason string) (*plugin.GrantResponse, error) {
-	return &plugin.GrantResponse{
-		Status:  plugin.GrantStatusDenied,
-		Message: reason,
-	}, nil
+func (p *ServiceNowPlugin) processCI(ciName string) string {
+	CI := p.getCI(ciName)
+	errorString := p.checkCI(*CI)
+
+	return errorString
 }
 
-func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
-	loc, _ := time.LoadLocation(timezone)
+func (p *ServiceNowPlugin) processChanges(ciName string) (string, time.Duration, *change_type) {
+	var sysparm_offset = 0
 
-	return fmt.Sprintf("%02d:%02d:%02d",
-		t.In(loc).Hour(),
-		t.In(loc).Minute(),
-		t.In(loc).Second())
+	snowChanges, sysparm_offset := p.getChanges(ciName, sysparm_offset)
+	var validChange *change_type = nil
+	var changeRemainingTime time.Duration = 0
+	var remainingTime time.Duration = 0
+
+	errorString := ""
+	for {
+		for _, snowChange := range snowChanges {
+			change := p.parseChange(*snowChange)
+			errorString, remainingTime = p.checkChange(change)
+			if errorString == "" {
+				validChange = &change
+				changeRemainingTime = remainingTime
+				break
+			}
+		}
+		if validChange != nil || len(snowChanges) < sysparm_limit {
+			break
+		} else {
+			snowChanges, sysparm_offset = p.getChanges(ciName, sysparm_offset)
+		}
+	}
+
+	return errorString, changeRemainingTime, validChange
 }
 
 // https://dev.to/narasimha1997/create-kubernetes-jobs-in-golang-using-k8s-client-go-api-59ej
@@ -385,6 +429,15 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
 	}
 }
 
+// Public methods
+
+func (p *ServiceNowPlugin) Init() error {
+	p.Logger.Debug("This is a call to the Init method")
+	// p.getGlobalVars cannot be put in the Init method: the variables will be lost between different calls
+
+	return nil
+}
+
 func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.GrantResponse, error) {
 	p.Logger.Debug("This is a call to the GrantAccess method")
 	p.showRequest(ar, app)
@@ -394,57 +447,26 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	namespace := ar.Spec.Application.Namespace
 	arName := ar.ObjectMeta.Name
 	arDuration := ar.Spec.Duration.Duration
+	applicationName := ar.Spec.Application.Name
 
-	sysparm_offset := 0
+	p.getGlobalVars()
 
-	snowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "No Service Now URL given (environment variable SERVICE_NOW_URL is empty)")
-	if snowUrl == "" {
-		return p.denyAccess("No environment variable SERVICE_NOW_URL found, cannot find SNOW API")
-	}
-
-	timezone = p.getEnvVarWithDefault("TIMEZONE", "UTC")
-	p.getK8sConfig()
-
-	username, password := p.getSNOWCredentials()
-
-	ciLabel := p.getEnvVarWithDefault("CI_LABEL", "ci_name")
-	ciName := p.getCIName(app, ciLabel)
+	ciName := p.getCIName(app)
 	if ciName == "\"\"" {
-		application := ar.Spec.Application.Name
-		return p.denyAccess("No label " + ciLabel + " in app " + application)
+		errorText := fmt.Sprintf("No CI name found: expected label with name %s in application %s", ciLabel, applicationName)
+		p.Logger.Error(errorText)
+		return p.denyAccess(errorText)
 	}
-	p.Logger.Debug("Search for " + ciName + " in the CMDB...")
 
-	CI := p.getCI(username, password, ciName)
-	errorString := p.checkCI(*CI)
+	errorString := p.processCI(ciName)
 	if errorString != "" {
 		p.Logger.Error("Access Denied for " + requesterName + " : " + errorString)
 		return p.denyAccess(errorString)
 	}
 
-	snowChanges, sysparm_offset := p.getChanges(username, password, ciName, sysparm_offset)
-	var validChange *change_type = nil
-	var changeRemainingTime time.Duration = 0
-	var remainingTime time.Duration = 0
-	errorString = ""
-	for {
-		for _, snowChange := range snowChanges {
-			change := p.parseChange(*snowChange)
-			errorString, remainingTime = p.checkChange(change)
-			if errorString == "" {
-				validChange = &change
-				changeRemainingTime = remainingTime
-				break
-			}
-		}
-		if validChange != nil || len(snowChanges) < sysparm_limit {
-			break
-		} else {
-			snowChanges, sysparm_offset = p.getChanges(username, password, ciName, sysparm_offset)
-		}
-	}
+	errorString, changeRemainingTime, validChange := p.processChanges(ciName)
 
-	if validChange != nil {
+	if errorString == "" {
 		grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s, from %s to %s",
 			requesterName,
 			validChange.Type,
@@ -474,8 +496,8 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		endLocalDateString = p.getLocalTime(endDateTime)
 	}
 
-	// jsonAr, _ := json.Marshal(ar)
-	// p.Logger.Debug(string(jsonAr))
+	jsonAr, _ := json.Marshal(ar)
+	p.Logger.Debug(string(jsonAr))
 
 	grantedAccessTextUI := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__",
 		validChange.Number,
@@ -490,37 +512,21 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	}, nil
 }
 
-// RevokeAccess is the method that will be called by the EphemeralAccess controller
-// when an AccessRequest is expired. Plugins authors may decide to not implement this
-// method depending on the use case. In this case it is safe to just return nil, nil.
 func (p *ServiceNowPlugin) RevokeAccess(ar *api.AccessRequest, app *argocd.Application) (*plugin.RevokeResponse, error) {
-	p.Logger.Info("This is a call to the RevokeAccess method")
-	return &plugin.RevokeResponse{
-		Status: plugin.RevokeStatusRevoked,
-		// The message can be returned as markdown
-		Message: "Revoked access by the ServiceNow plugin",
-	}, nil
+	return nil, nil
 }
 
-// main must be defined as it is the plugin entrypoint. It will be automatically called
-// by the EphemeralAccess controller.
 func main() {
-	// NewPluginLogger will return a logger that will respect the same level and format
-	// defined to the EphemeralAccess controller.
 	logger, err := log.NewPluginLogger()
 	if err != nil {
 		panic(fmt.Sprintf("Error creating plugin logger: %s", err))
 	}
 
-	// create a new instance of your plugin after initializing the logger and other
-	// dependencies. However it is preferable to leave the main function lean and
-	// initialize plugin dependencies in the `Init` method.
 	p := &ServiceNowPlugin{
 		Logger: logger,
 	}
 
-	// create the plugin server config
 	srvConfig := plugin.NewServerConfig(p, logger)
-	// initialize the plugin server
+
 	goPlugin.Serve(srvConfig)
 }
