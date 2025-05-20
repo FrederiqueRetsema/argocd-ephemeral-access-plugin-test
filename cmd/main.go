@@ -389,11 +389,10 @@ func (p *ServiceNowPlugin) processChanges(ciName string) (string, time.Duration,
 func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName string, jobStartTime time.Time) {
 	p.Logger.Debug(fmt.Sprintf("createAbortJob: %s, %s", namespace, accessrequestName))
 	jobName := strings.Replace("stop-"+accessrequestName, ".", "-", -1)
-	cmd := fmt.Sprintf("kubectl delete accessrequest -n argocd %s && kubectl delete cronjob -n argocd -l accessrequest=", accessrequestName, accessrequestName)
+	cmd := fmt.Sprintf("kubectl delete accessrequest -n argocd %s && kubectl delete cronjob -n argocd -l accessrequest=%s", accessrequestName, accessrequestName)
 	cronjobs := k8sclientset.BatchV1().CronJobs(namespace)
 
 	var backOffLimit int32 = 0
-	var ttlSecondsAfterFinished int32 = 86400 // 1 day
 
 	var labelMap map[string]string = make(map[string]string)
 	labelMap["accessrequest"] = accessrequestName
@@ -408,7 +407,6 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
 			Schedule: fmt.Sprintf("%d %d %d %d *", jobStartTime.Minute(), jobStartTime.Hour(), jobStartTime.Day(), jobStartTime.Month()),
 			JobTemplate: batchv1.JobTemplateSpec{
 				Spec: batchv1.JobSpec{
-					TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
 					Template: v1.PodTemplateSpec{
 						Spec: v1.PodSpec{
 							ServiceAccountName: "remove-accessrequest-job-sa",
@@ -416,7 +414,7 @@ func (p *ServiceNowPlugin) createAbortJob(namespace string, accessrequestName st
 								{
 									Name:    jobName,
 									Image:   "bitnami/kubectl:latest",
-									Command: []string{cmd},
+									Command: []string{"sh", "-c", cmd},
 								},
 							},
 							RestartPolicy: v1.RestartPolicyNever,
