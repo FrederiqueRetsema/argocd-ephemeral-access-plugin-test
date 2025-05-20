@@ -501,10 +501,10 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChanges() {
 		testConvertTimeToString(startDate),
 		testConvertTimeToString(endDate))
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := testPrepareGetChange(t, loggerObj, ciName, responseList)
+	server := testPrepareGetChange(t, loggerObj, ciName, responseMap)
 	defer server.Close()
 	snowUrl = server.URL
 
@@ -531,7 +531,7 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChangesTwoWindows() {
 	endDate := currentTime.Add(time.Hour * 2)
 
 	ciName := "app-demoapp"
-	var responseList map[string]string = make(map[string]string)
+	var responseMap map[string]string = make(map[string]string)
 
 	requestURI := "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0"
 	responseText := `{"result":[{"type":"1", "number":"CHG300030", "short_description":"test", "start_date":"2025-05-15 17:00:00", "end_date":"2025-05-15 17:45:00"},
@@ -540,7 +540,7 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChangesTwoWindows() {
                                 {"type":"1", "number":"CHG300033", "short_description":"test4", "start_date":"2025-05-15 20:00:00", "end_date":"2025-05-15 20:45:00"},
                                 {"type":"1", "number":"CHG300034", "short_description":"test5", "start_date":"2025-05-15 21:00:00", "end_date":"2025-05-15 21:45:00"}]}`
 
-	responseList[requestURI] = responseText
+	responseMap[requestURI] = responseText
 
 	requestURI = "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=5"
 	responseText = fmt.Sprintf(`{"result":[{"type":"1", "number":"CHG300040", "short_description":"test6", "start_date":"2025-05-15 17:00:00", "end_date":"2025-05-15 17:45:00"},
@@ -551,9 +551,9 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChangesTwoWindows() {
 		testConvertTimeToString(startDate),
 		testConvertTimeToString(endDate))
 
-	responseList[requestURI] = responseText
+	responseMap[requestURI] = responseText
 
-	server := testPrepareGetChange(t, loggerObj, ciName, responseList)
+	server := testPrepareGetChange(t, loggerObj, ciName, responseMap)
 	defer server.Close()
 	snowUrl = server.URL
 
@@ -628,13 +628,13 @@ func TestPluginHelperMethods(t *testing.T) {
 	suite.Run(t, new(PluginHelperMethodsTestSuite))
 }
 
-func simulateSimpleHttpRequestToSNOW(t *testing.T, responseList map[string]string) *httptest.Server {
+func simulateSimpleHttpRequestToSNOW(t *testing.T, responseMap map[string]string) *httptest.Server {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := ""
-		for uri, _ := range responseList {
+		for uri, _ := range responseMap {
 			if uri == r.URL.RequestURI() {
-				response = responseList[uri]
+				response = responseMap[uri]
 				break
 			}
 		}
@@ -674,11 +674,11 @@ func (s *SNOWTestSuite) TestGetFromSNOWAPIErrorInApiCall() {
 	snowPassword = "testPassword"
 	ciName := "app-demoapp"
 
-	var responseList map[string]string = make(map[string]string)
+	var responseMap map[string]string = make(map[string]string)
 	requestURI := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
-	responseList[requestURI] = responseText
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	defer server.Close()
 	snowUrl = server.URL
 
@@ -708,10 +708,10 @@ func (s *SNOWTestSuite) TestGetFromSNOWAPIServerDown() {
 	snowPassword = "testPassword"
 	requestURI := "/api/test"
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	defer server.Close()
 	snowUrl = server.URL
 
@@ -733,10 +733,10 @@ func (s *SNOWTestSuite) TestGetFromSNOWAPINormalResponse() {
 	snowPassword = "testPassword"
 	requestURI := "/api/test"
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	defer server.Close()
 	snowUrl = server.URL
 
@@ -769,10 +769,10 @@ func (s *SNOWTestSuite) TestGetCIServerDown() {
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	defer server.Close()
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
@@ -806,10 +806,10 @@ func (s *SNOWTestSuite) TestGetCINoJSON() {
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -843,10 +843,10 @@ func (s *SNOWTestSuite) TestGetChangeServerDown() {
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	defer server.Close()
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
@@ -881,10 +881,10 @@ func (s *SNOWTestSuite) TestGetChangeNoJSON() {
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -922,10 +922,10 @@ func (s *CITestSuite) TestGetCINoCI() {
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -943,10 +943,10 @@ func testPrepareGetCI(t *testing.T, loggerObj *MockedLogger, ciName string, resp
 	snowPassword = "testPassword"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	snowUrl = server.URL
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
@@ -1018,10 +1018,10 @@ func (s *ChangeTestSuite) TestGetChangeNoChange() {
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -1035,11 +1035,11 @@ func (s *ChangeTestSuite) TestGetChangeNoChange() {
 	_, _ = p.getChanges(ciName, 0)
 }
 
-func testPrepareGetChange(t *testing.T, loggerObj *MockedLogger, ciName string, responseList map[string]string) *httptest.Server {
+func testPrepareGetChange(t *testing.T, loggerObj *MockedLogger, ciName string, responseMap map[string]string) *httptest.Server {
 	snowUsername = "testUser"
 	snowPassword = "testPassword"
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	snowUrl = server.URL
 
 	return server
@@ -1054,10 +1054,10 @@ func (s *ChangeTestSuite) TestGetChangesOneChange() {
 	responseText := `{"result":[{"type":"1", "number":"CHG300030", "short_description":"test", "start_date":"2025-05-15 17:00:00", "end_date":"2025-05-15 17:45:00"}]}`
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := testPrepareGetChange(t, loggerObj, ciName, responseList)
+	server := testPrepareGetChange(t, loggerObj, ciName, responseMap)
 	defer server.Close()
 	snowUrl = server.URL
 
@@ -1084,10 +1084,10 @@ func (s *ChangeTestSuite) TestGetChangesTwoChanges() {
 	responseText := `{"result":[{"type":"1", "number":"CHG300030", "short_description":"test", "start_date":"2025-05-15 17:00:00", "end_date":"2025-05-15 17:45:00"},
                                 {"type":"1", "number":"CHG300031", "short_description":"test2", "start_date":"2025-05-15 18:00:00", "end_date":"2025-05-15 18:45:00"}]}`
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := testPrepareGetChange(t, loggerObj, ciName, responseList)
+	server := testPrepareGetChange(t, loggerObj, ciName, responseMap)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -1118,10 +1118,10 @@ func (s *ChangeTestSuite) TestGetChangesExactWindowSize() {
                                 {"type":"1", "number":"CHG300033", "short_description":"test4", "start_date":"2025-05-15 20:00:00", "end_date":"2025-05-15 20:45:00"},
                                 {"type":"1", "number":"CHG300034", "short_description":"test5", "start_date":"2025-05-15 21:00:00", "end_date":"2025-05-15 21:45:00"}]}`
 
-	var responseList map[string]string = make(map[string]string)
-	responseList[requestURI] = responseText
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
 
-	server := testPrepareGetChange(t, loggerObj, ciName, responseList)
+	server := testPrepareGetChange(t, loggerObj, ciName, responseMap)
 	defer server.Close()
 
 	snowUrl = server.URL
@@ -1405,17 +1405,17 @@ func (s *PublicMethodsTestSuite) TestGrantAccess() {
 	loggerObj.On("Debug", mock.Anything)
 	loggerObj.On("Info", mock.Anything)
 
-	var responseList map[string]string = make(map[string]string)
+	var responseMap map[string]string = make(map[string]string)
 
 	requestURI := "/api/now/table/cmdb_ci?name=app-demoapp&sysparm_fields=install_status,name"
 	responseText := `{"result": [{"install_status": "1", "name": "demoapp"}]}`
-	responseList[requestURI] = responseText
+	responseMap[requestURI] = responseText
 
 	requestURI = "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0"
 	responseText = fmt.Sprintf(`{"result":[{"type":"1", "number":"CHG300030", "short_description":"valid change", "start_date":"%s", "end_date":"%s"}]}`, startDateString, endDateString)
-	responseList[requestURI] = responseText
+	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseList)
+	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
 	defer server.Close()
 
 	os.Setenv("SERVICE_NOW_URL", server.URL)
