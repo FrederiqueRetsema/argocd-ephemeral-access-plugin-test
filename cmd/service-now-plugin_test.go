@@ -22,7 +22,9 @@ import (
 	api "github.com/argoproj-labs/argocd-ephemeral-access/api/ephemeral-access/v1alpha1"
 	"github.com/argoproj-labs/argocd-ephemeral-access/pkg/plugin"
 
+	batchv1 "k8s.io/api/batch/v1"
 	coreV1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	testclient "k8s.io/client-go/kubernetes/fake"
 )
@@ -43,7 +45,7 @@ type PublicMethodsTestSuite struct {
 	suite.Suite
 }
 
-type SNOWTestSuite struct {
+type ServiceNowTestSuite struct {
 	suite.Suite
 }
 
@@ -184,11 +186,11 @@ func (s *HelperMethodsTestSuite) TestGetEnvVarWithPanicNoEnvVar() {
 		loggerObj.AssertExpectations(t)
 	}()
 
-	snowUrl = ""
+	serviceNowUrl = ""
 	os.Setenv("SERVICE_NOW_URL", "")
 	loggerObj.On("Error", errorText)
 
-	snowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", errorText)
+	serviceNowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", errorText)
 
 	t.Errorf("The code did not panic")
 }
@@ -198,12 +200,12 @@ func (s *HelperMethodsTestSuite) TestGetEnvVarWithPanicWithEnvVar() {
 
 	p, loggerObj := testGetPlugin()
 
-	snowUrl = ""
+	serviceNowUrl = ""
 	os.Setenv("SERVICE_NOW_URL", "https://example.com")
 
-	snowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "Panic!")
+	serviceNowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "Panic!")
 
-	s.Assertions.Equal("https://example.com", snowUrl, "The correct URL is retrieved")
+	s.Assertions.Equal("https://example.com", serviceNowUrl, "The correct URL is retrieved")
 	loggerObj.AssertExpectations(t)
 }
 
@@ -378,11 +380,11 @@ func (s *K8SRelatedTestSuite) TestGetCINameEmpty() {
 	var app *argocd.Application = new(argocd.Application)
 	var m map[string]string
 
-	loggerObj.On("Debug", "Search for ci_name in the CMDB...")
-	loggerObj.On("Debug", "ciLabel ci_name found: ")
+	loggerObj.On("Debug", "Search for ci-name in the CMDB...")
+	loggerObj.On("Debug", "ciLabel ci-name found: ")
 
 	app.ObjectMeta.Labels = m
-	ciLabel = "ci_name"
+	ciLabel = "ci-name"
 	ciName := p.getCIName(app)
 
 	s.Assertions.Equal("", ciName, "No label found, assume empty string")
@@ -396,10 +398,10 @@ func (s *K8SRelatedTestSuite) TestGetCINameFilled() {
 	var app *argocd.Application = new(argocd.Application)
 	var m map[string]string = make(map[string]string)
 
-	loggerObj.On("Debug", "Search for ci_name in the CMDB...")
-	loggerObj.On("Debug", "ciLabel ci_name found: app-demoapp")
+	loggerObj.On("Debug", "Search for ci-name in the CMDB...")
+	loggerObj.On("Debug", "ciLabel ci-name found: app-demoapp")
 
-	ciLabel = "ci_name"
+	ciLabel = "ci-name"
 	m[ciLabel] = "app-demoapp"
 	app.ObjectMeta.Labels = m
 
@@ -421,7 +423,7 @@ func (s *PluginHelperMethodsTestSuite) TestGetGlobalVars() {
 	os.Setenv("SERVICE_NOW_URL", exampleUrl)
 	os.Setenv("TIMEZONE", "")
 
-	secretName := "snow-secret"
+	secretName := "servicenow-secret"
 	namespace := "argocd-ephemeral-access"
 	testUsername := "my-username"
 	testPassword := "my-password"
@@ -432,10 +434,10 @@ func (s *PluginHelperMethodsTestSuite) TestGetGlobalVars() {
 	unittest = true
 	p.getGlobalVars()
 
-	s.Assertions.Equal(exampleUrl, snowUrl, "snowURL should be retrieved from environment variables")
+	s.Assertions.Equal(exampleUrl, serviceNowUrl, "serviceNowUrl should be retrieved from environment variables")
 	s.Assertions.Equal("UTC", timezone, "Default timezone should be UTC")
-	s.Assertions.Equal(testUsername, snowUsername, "SNOW username should be correct")
-	s.Assertions.Equal(testPassword, snowPassword, "SNOW password should be correct")
+	s.Assertions.Equal(testUsername, serviceNowUsername, "ServiceNow username should be correct")
+	s.Assertions.Equal(testPassword, serviceNowPassword, "ServiceNow password should be correct")
 	loggerObj.AssertExpectations(t)
 }
 
@@ -471,7 +473,7 @@ func (s *PluginHelperMethodsTestSuite) TestProcessCI() {
 	responseText := fmt.Sprintf(`{"result":[{"install_status":"1", "name":"%s"}]}`, ciName)
 	server, _ := testPrepareGetCI(t, loggerObj, ciName, responseText)
 	defer server.Close()
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	loggerObj.On("Debug", mock.Anything)
 
@@ -506,7 +508,7 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChanges() {
 
 	server := testPrepareGetChange(t, loggerObj, ciName, responseMap)
 	defer server.Close()
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	loggerObj.On("Debug", mock.Anything)
 
@@ -518,7 +520,8 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChanges() {
 	}
 
 	s.Assertions.Equal("CHG300030", validChange.Number, "Numbers must be equal")
-	s.Assertions.Equal("test", validChange.ShortDescription, "Short desciptions must be equal")
+	s.Assertions.Equal("test", validChange.ShortDescription, "Short descriptions must be equal")
+	loggerObj.AssertExpectations(t)
 }
 
 func (s *PluginHelperMethodsTestSuite) TestProcessChangesTwoWindows() {
@@ -555,7 +558,7 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChangesTwoWindows() {
 
 	server := testPrepareGetChange(t, loggerObj, ciName, responseMap)
 	defer server.Close()
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	loggerObj.On("Debug", mock.Anything)
 
@@ -567,15 +570,157 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChangesTwoWindows() {
 	}
 
 	s.Assertions.Equal("CHG300044", validChange.Number, "Numbers must be equal")
-	s.Assertions.Equal("test10", validChange.ShortDescription, "Short desciptions must be equal")
+	s.Assertions.Equal("test10", validChange.ShortDescription, "Short descriptions must be equal")
+	loggerObj.AssertExpectations(t)
 }
 
-func (s *PluginHelperMethodsTestSuite) TestDenyAccess() {
+func (s *PluginHelperMethodsTestSuite) TestCreateRevokeJobCorrect() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+
+	namespace := "argocd"
+	accessRequestName := "test-ar"
+	jobStartTime := time.Now().Add(-1 * time.Minute)
+	expectedJobName := "stop-" + accessRequestName
+
+	k8sclientset = testclient.NewClientset()
+
+	loggerObj.On("Debug", fmt.Sprintf("createRevokeJob: %s, %s", namespace, accessRequestName))
+	loggerObj.On("Info", fmt.Sprintf("Created K8s job %s successfully in namespace argocd", expectedJobName))
+
+	p.createRevokeJob(namespace, accessRequestName, jobStartTime)
+
+	expectedSchedule := fmt.Sprintf("%d %d %d %d *", jobStartTime.Minute(), jobStartTime.Hour(), jobStartTime.Day(), jobStartTime.Month())
+	expectedCommand := []string{"sh", "-c", fmt.Sprintf("kubectl delete accessrequest -n argocd %s && kubectl delete cronjob -n argocd %s", accessRequestName, expectedJobName)}
+	cronjobs := k8sclientset.BatchV1().CronJobs(namespace)
+	myCronJob, err := cronjobs.Get(context.TODO(), expectedJobName, metav1.GetOptions{})
+
+	var zero int32 = 0
+
+	s.Assertions.Equal(expectedJobName, myCronJob.ObjectMeta.Name, "Name should be the correct job name")
+	s.Assertions.Equal(namespace, myCronJob.ObjectMeta.Namespace, "Namespace should be the correct namespace")
+	s.Assertions.Equal(expectedSchedule, myCronJob.Spec.Schedule, "Schedule should be the correct schedule")
+	s.Assertions.Equal("remove-accessrequest-job-sa", myCronJob.Spec.JobTemplate.Spec.Template.Spec.ServiceAccountName, "Service account name should be the correct service account name")
+	s.Assertions.Equal(expectedJobName, myCronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Name, "Container name should be the correct container name")
+	s.Assertions.Equal("bitnami/kubectl:latest", myCronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image, "Image should be the correct image")
+	s.Assertions.Equal(expectedCommand, myCronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Command, "Image should be the correct image")
+	s.Assertions.Equal(v1.RestartPolicyNever, myCronJob.Spec.JobTemplate.Spec.Template.Spec.RestartPolicy, "Restart policy should be never")
+	s.Assertions.Equal(&zero, myCronJob.Spec.JobTemplate.Spec.BackoffLimit, "BackoffLimit should be 0")
+
+	s.Assertions.Equal(nil, err, "No errors expected")
+
+	loggerObj.AssertExpectations(t)
+	_ = cronjobs.Delete(context.TODO(), expectedJobName, metav1.DeleteOptions{})
+}
+
+func (s *PluginHelperMethodsTestSuite) TestCreateRevokeJobFail() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+
+	namespace := "argocd"
+	accessRequestName := "test-ar"
+	jobStartTime := time.Now().Add(-1 * time.Minute)
+	expectedJobName := "stop-" + accessRequestName
+
+	k8sclientset = testclient.NewClientset()
+
+	loggerObj.On("Debug", fmt.Sprintf("createRevokeJob: %s, %s", namespace, accessRequestName))
+	loggerObj.On("Error", fmt.Sprintf("Failed to create K8s job %s in namespace argocd: cronjobs.batch \"stop-test-ar\" already exists.", expectedJobName))
+
+	cronjobs := k8sclientset.BatchV1().CronJobs(namespace)
+	cronJobSpec := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      expectedJobName,
+			Namespace: namespace,
+		},
+	}
+	_, _ = cronjobs.Create(context.TODO(), cronJobSpec, metav1.CreateOptions{})
+
+	p.createRevokeJob(namespace, accessRequestName, jobStartTime)
+
+	loggerObj.AssertExpectations(t)
+	_ = cronjobs.Delete(context.TODO(), expectedJobName, metav1.DeleteOptions{})
+}
+
+func (s *PluginHelperMethodsTestSuite) TestDetermineDurationAndRealEndTimeChangeTimeWins() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+
+	var arDuration time.Duration = 4 * time.Hour
+	var changeRemainingTime time.Duration = 1 * time.Hour
+	var endDate = time.Now().Add(1 * time.Hour)
+
+	duration, realEndTime := p.determineDurationAndRealEndTime(arDuration, changeRemainingTime, endDate)
+
+	s.Assertions.Equal(changeRemainingTime, duration, "Expected duration: 1 hour")
+	s.Assertions.Equal(endDate, realEndTime, "Expected end time: 1 hour from now")
+
+	loggerObj.AssertExpectations(t)
+}
+
+func (s *PluginHelperMethodsTestSuite) TestDetermineDurationAndRealEndTimeArDurationWins() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+
+	var arDuration time.Duration = 4 * time.Hour
+	var changeRemainingTime time.Duration = 8 * time.Hour
+	var endDate = time.Now().Add(8 * time.Hour)
+
+	var expectedRealEndTime = time.Now().Add(4 * time.Hour)
+
+	duration, realEndTime := p.determineDurationAndRealEndTime(arDuration, changeRemainingTime, endDate)
+
+	s.Assertions.Equal(arDuration, duration, "Expected duration: 4 hour")
+	s.Assertions.Equal(expectedRealEndTime, realEndTime, "Expected end time: 4 hour from now")
+
+	loggerObj.AssertExpectations(t)
+}
+
+func (s *PluginHelperMethodsTestSuite) TestDetermineGrantedTexts() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+
+	requesterName := "TestUser"
+	requestedRole := "admin"
+	var validChange change_type
+
+	validChange.Type = "1"
+	validChange.Number = "CHG300300"
+	validChange.ShortDescription = "unittests"
+	validChange.EndDate = time.Date(2025, 5, 20, 23, 59, 59, 0, time.UTC)
+	realEndDate := time.Date(2025, 5, 20, 23, 59, 59, 0, time.UTC)
+
+	var remainingTime time.Duration = 1 * time.Hour
+
+	grantedAccessText, grantedAccessUIText := p.determineGrantedTexts(requesterName, requestedRole, validChange, remainingTime, realEndDate)
+
+	expectedGrantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s, from %s to %s",
+		requesterName,
+		validChange.Type,
+		validChange.Number,
+		validChange.ShortDescription,
+		requestedRole,
+		p.getLocalTime(time.Now()),
+		p.getLocalTime(validChange.EndDate))
+
+	expectedGrantedAccessUIText := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__",
+		validChange.Number,
+		validChange.ShortDescription,
+		realEndDate,
+		remainingTime.Truncate(time.Second).String())
+
+	s.Assertions.Equal(expectedGrantedAccessText, grantedAccessText, "Granted access text should be what is expected")
+	s.Assertions.Equal(expectedGrantedAccessUIText, grantedAccessUIText, "Granted access text for UI should be what is expected")
+
+	loggerObj.AssertExpectations(t)
+}
+
+func (s *PluginHelperMethodsTestSuite) TestDeny() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
 	reason := "whatever"
-	response, err := p.denyAccess(reason)
+	response, err := p.deny(reason)
 
 	s.Assertions.Equal(plugin.GrantStatusDenied, response.Status, response, "Access request should be denied")
 	s.Assertions.Equal(reason, response.Message, response, "Reason should be correct")
@@ -584,8 +729,22 @@ func (s *PluginHelperMethodsTestSuite) TestDenyAccess() {
 	loggerObj.AssertExpectations(t)
 }
 
+func (s *PluginHelperMethodsTestSuite) TestGrant() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+
+	reason := "whatever"
+	response, err := p.grant(reason)
+
+	s.Assertions.Equal(plugin.GrantStatusGranted, response.Status, response, "Access request should be denied")
+	s.Assertions.Equal(reason, response.Message, response, "Reason should be correct")
+	s.Assertions.Equal(nil, err, "No error")
+
+	loggerObj.AssertExpectations(t)
+}
+
 func setCredentialsSecret(namespace string, secretName string, username string, password string) {
-	s := &coreV1.Secret{
+	secret := &coreV1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: namespace,
@@ -598,28 +757,28 @@ func setCredentialsSecret(namespace string, secretName string, username string, 
 	}
 
 	k8sclientset = testclient.NewClientset()
-	k8sclientset.CoreV1().Secrets(namespace).Create(context.TODO(), s, metav1.CreateOptions{})
+	k8sclientset.CoreV1().Secrets(namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 }
 
-func (s *PluginHelperMethodsTestSuite) TestGetSNOWCredentials() {
+func (s *PluginHelperMethodsTestSuite) TestGetServiceNowCredentials() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
-	secretName := "snow-secret"
+	secretName := "servicenow-secret"
 	namespace := "argocd-ephemeral-access"
-	snowUsername := "SNOWUsername"
-	snowPassword := "SNOWPassword"
+	serviceNowUsername := "serviceNowUsername"
+	serviceNowPassword := "serviceNowPassword"
 
-	setCredentialsSecret(namespace, secretName, snowUsername, snowPassword)
+	setCredentialsSecret(namespace, secretName, serviceNowUsername, serviceNowPassword)
 
-	loggerObj.On("Debug", "Environment variable SECRET_NAMESPACE is empty, assuming argocd-ephemeral-access")
-	loggerObj.On("Debug", "Environment variable SNOW_SECRET_NAME is empty, assuming snow-secret")
-	loggerObj.On("Debug", "Get credentials from secret [argocd-ephemeral-access]snow-secret...")
+	loggerObj.On("Debug", "Environment variable SERVICENOW_SECRET_NAMESPACE is empty, assuming argocd-ephemeral-access")
+	loggerObj.On("Debug", "Environment variable SERVICENOW_SECRET_NAME is empty, assuming servicenow-secret")
+	loggerObj.On("Debug", "Get credentials from secret [argocd-ephemeral-access]servicenow-secret...")
 
-	username, password := p.getSNOWCredentials()
+	username, password := p.getServiceNowCredentials()
 
-	s.Assertions.Equal(snowUsername, username, "Username found")
-	s.Assertions.Equal(snowPassword, password, "Password found")
+	s.Assertions.Equal(serviceNowUsername, username, "Username found")
+	s.Assertions.Equal(serviceNowPassword, password, "Password found")
 
 	loggerObj.AssertExpectations(t)
 }
@@ -628,7 +787,7 @@ func TestPluginHelperMethods(t *testing.T) {
 	suite.Run(t, new(PluginHelperMethodsTestSuite))
 }
 
-func simulateSimpleHttpRequestToSNOW(t *testing.T, responseMap map[string]string) *httptest.Server {
+func simulateSimpleHttpRequestToServiceNow(t *testing.T, responseMap map[string]string) *httptest.Server {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response := ""
@@ -638,13 +797,16 @@ func simulateSimpleHttpRequestToSNOW(t *testing.T, responseMap map[string]string
 				break
 			}
 		}
+		if response == "" {
+			fmt.Printf("No response found for %s, error in testset?\n", r.URL.RequestURI())
+		}
 		if r.Header.Get("Accept") != "application/json" {
 			t.Errorf("Expected Accept: application/json header, got: %s", r.Header.Get("Accept"))
 		}
 		usedUsername, usedPassword, ok := r.BasicAuth()
 		if ok {
-			assert.Equal(t, snowUsername, usedUsername, "Username that is used should match username that is requested")
-			assert.Equal(t, snowPassword, usedPassword, "Password that is used should match username that is requested")
+			assert.Equal(t, serviceNowUsername, usedUsername, "Username that is used should match username that is requested")
+			assert.Equal(t, serviceNowPassword, usedPassword, "Password that is used should match username that is requested")
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -653,7 +815,38 @@ func simulateSimpleHttpRequestToSNOW(t *testing.T, responseMap map[string]string
 	return server
 }
 
-func (s *SNOWTestSuite) TestGetFromSNOWAPIErrorInApiCall() {
+func simulateSimpleHttpRequestWithStatusCodeRedirect(response string) (*httptest.Server, *httptest.Server) {
+
+	var secondServer *httptest.Server = httptest.NewServer(http.HandlerFunc(func(w2 http.ResponseWriter, r2 *http.Request) {
+		w2.WriteHeader(http.StatusOK)
+		w2.Write([]byte(response))
+	}))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w1 http.ResponseWriter, r1 *http.Request) {
+		http.Redirect(w1, r1, secondServer.URL, http.StatusFound)
+	}))
+	return server, secondServer
+}
+
+func simulateSimpleHttpRequestWithStatusCodeForbidden(response string) *httptest.Server {
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(response))
+	}))
+	return server
+}
+
+func simulateSimpleHttpRequestWithStatusCodeServerSideError(response string) *httptest.Server {
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(response))
+	}))
+	return server
+}
+
+func (s *ServiceNowTestSuite) TestGetFromServiceNowAPIErrorInApiCall() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
@@ -670,30 +863,37 @@ func (s *SNOWTestSuite) TestGetFromSNOWAPIErrorInApiCall() {
 		loggerObj.AssertExpectations(t)
 	}()
 
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 	ciName := "app-demoapp"
 
+	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
+
 	var responseMap map[string]string = make(map[string]string)
-	requestURI := fmt.Sprintf("%s/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", snowUrl, ciName)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
 	defer server.Close()
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
-	apiCall := fmt.Sprintf("%s%s%s", server.URL, server.URL, requestURI)
+	// requestURI is changed to something incorrect (contains serviceNowURL which it shouldn't)
+
+	requestURI = fmt.Sprintf("%s%s", serviceNowUrl, requestURI)
+
+	// Expected apiCall contains the serviceNowURL twice
+	apiCall := fmt.Sprintf("%s%s", serviceNowUrl, requestURI)
 
 	loggerObj.On("Debug", fmt.Sprintf("apiCall: %s", apiCall))
 	loggerObj.On("Error", mock.Anything)
 
-	_ = p.getFromSNOWAPI(apiCall)
+	_ = p.getFromServiceNowAPI(requestURI)
+	loggerObj.AssertExpectations(t)
 }
 
-func (s *SNOWTestSuite) TestGetFromSNOWAPIServerDown() {
+func (s *ServiceNowTestSuite) TestgetFromServiceNowAPIServerDown() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
-	errorText := "Service Now API server is down"
+	errorText := "ServiceNow API server is down"
 	responseText := "<html><body>Server down!</body></html>"
 
 	defer func() {
@@ -704,16 +904,16 @@ func (s *SNOWTestSuite) TestGetFromSNOWAPIServerDown() {
 		loggerObj.AssertExpectations(t)
 	}()
 
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 	requestURI := "/api/test"
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
 	defer server.Close()
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
 
@@ -721,39 +921,138 @@ func (s *SNOWTestSuite) TestGetFromSNOWAPIServerDown() {
 	loggerObj.On("Debug", responseText)
 	loggerObj.On("Error", errorText)
 
-	_ = p.getFromSNOWAPI(apiCall)
+	_ = p.getFromServiceNowAPI(requestURI)
+	loggerObj.AssertExpectations(t)
 }
 
-func (s *SNOWTestSuite) TestGetFromSNOWAPINormalResponse() {
+func (s *ServiceNowTestSuite) TestgetFromServiceNowAPINormalResponse() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 	responseText := "{\"results\":[]}"
 
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 	requestURI := "/api/test"
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
 	defer server.Close()
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
 
 	loggerObj.On("Debug", fmt.Sprintf("apiCall: %s", apiCall))
 	loggerObj.On("Debug", responseText)
 
-	result := p.getFromSNOWAPI(apiCall)
+	result := p.getFromServiceNowAPI(requestURI)
 	s.Assertions.Equal(responseText, string(result), "Correct result from API")
+	loggerObj.AssertExpectations(t)
 }
 
-func (s *SNOWTestSuite) TestGetCIServerDown() {
+func (s *ServiceNowTestSuite) TestgetFromServiceNowAPINormalResponseWithRedirect() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+	responseText := "{\"results\":[]}"
+
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
+	requestURI := "/api/test"
+
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
+
+	server, secondServer := simulateSimpleHttpRequestWithStatusCodeRedirect(responseText)
+	defer server.Close()
+	defer secondServer.Close()
+	serviceNowUrl = server.URL
+
+	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
+	loggerObj.On("Debug", fmt.Sprintf("apiCall: %s", apiCall))
+	loggerObj.On("Debug", responseText)
+
+	// Redirect is done by http, not by the plugin program. We will therefore just get the apiCall for the primary address,
+	// not for the redirect server.
+	//
+	// It is very important that redirects works.
+
+	result := p.getFromServiceNowAPI(requestURI)
+	s.Assertions.Equal(responseText, string(result), "Correct result from API")
+	loggerObj.AssertExpectations(t)
+}
+
+func (s *ServiceNowTestSuite) TestgetFromServiceNowAPINormalResponseWithForbidden() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+	responseText := "Forbidden"
+	errorText := "ServiceNow API changed"
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered panic text:", r)
+			s.Assertions.Equal(errorText, fmt.Sprintf("%v", r), "Panic text is correct")
+		}
+		loggerObj.AssertExpectations(t)
+	}()
+
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
+	requestURI := "/api/test"
+
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
+
+	server := simulateSimpleHttpRequestWithStatusCodeForbidden(responseText)
+	defer server.Close()
+	serviceNowUrl = server.URL
+
+	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
+	loggerObj.On("Debug", fmt.Sprintf("apiCall: %s", apiCall))
+	loggerObj.On("Debug", responseText)
+	loggerObj.On("Error", errorText)
+
+	_ = p.getFromServiceNowAPI(requestURI)
+}
+
+func (s *ServiceNowTestSuite) TestgetFromServiceNowAPINormalResponseWithServerSideError() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+	responseText := "Server side error"
+	errorText := "ServiceNow API server is down"
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered panic text:", r)
+			s.Assertions.Equal(errorText, fmt.Sprintf("%v", r), "Panic text is correct")
+		}
+		loggerObj.AssertExpectations(t)
+	}()
+
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
+	requestURI := "/api/test"
+
+	var responseMap map[string]string = make(map[string]string)
+	responseMap[requestURI] = responseText
+
+	server := simulateSimpleHttpRequestWithStatusCodeServerSideError(responseText)
+	defer server.Close()
+	serviceNowUrl = server.URL
+
+	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
+	loggerObj.On("Debug", fmt.Sprintf("apiCall: %s", apiCall))
+	loggerObj.On("Debug", responseText)
+	loggerObj.On("Error", errorText)
+
+	_ = p.getFromServiceNowAPI(requestURI)
+}
+
+func (s *ServiceNowTestSuite) TestGetCIServerDown() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
-	errorText := "Service Now API server is down"
+	errorText := "ServiceNow API server is down"
 	responseText := "<html><body>Server down!</body></html>"
 
 	defer func() {
@@ -764,15 +1063,15 @@ func (s *SNOWTestSuite) TestGetCIServerDown() {
 		loggerObj.AssertExpectations(t)
 	}()
 
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
 	defer server.Close()
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
@@ -782,12 +1081,12 @@ func (s *SNOWTestSuite) TestGetCIServerDown() {
 	loggerObj.On("Error", errorText)
 	defer server.Close()
 
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	_ = p.getCI("app-demoapp")
 }
 
-func (s *SNOWTestSuite) TestGetCINoJSON() {
+func (s *ServiceNowTestSuite) TestGetCINoJSON() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 	errorText := "Error in json.Unmarshal: invalid character '<' looking for beginning of value (<Result/>)"
@@ -801,18 +1100,18 @@ func (s *SNOWTestSuite) TestGetCINoJSON() {
 		loggerObj.AssertExpectations(t)
 	}()
 
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
 	defer server.Close()
 
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
 
@@ -823,12 +1122,12 @@ func (s *SNOWTestSuite) TestGetCINoJSON() {
 	_ = p.getCI(ciName)
 }
 
-func (s *SNOWTestSuite) TestGetChangeServerDown() {
+func (s *ServiceNowTestSuite) TestGetChangeServerDown() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
 	responseText := "<html><body>Server down!</body></html>"
-	errorText := "Service Now API server is down"
+	errorText := "ServiceNow API server is down"
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -838,15 +1137,15 @@ func (s *SNOWTestSuite) TestGetChangeServerDown() {
 		loggerObj.AssertExpectations(t)
 	}()
 
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
 	defer server.Close()
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
@@ -856,12 +1155,13 @@ func (s *SNOWTestSuite) TestGetChangeServerDown() {
 	loggerObj.On("Error", errorText)
 	defer server.Close()
 
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	_, _ = p.getChanges("app-demoapp", 0)
+	loggerObj.AssertExpectations(t)
 }
 
-func (s *SNOWTestSuite) TestGetChangeNoJSON() {
+func (s *ServiceNowTestSuite) TestGetChangeNoJSON() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
@@ -876,18 +1176,18 @@ func (s *SNOWTestSuite) TestGetChangeNoJSON() {
 		loggerObj.AssertExpectations(t)
 	}()
 
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
 	defer server.Close()
 
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
 
@@ -896,10 +1196,11 @@ func (s *SNOWTestSuite) TestGetChangeNoJSON() {
 	loggerObj.On("Error", errorText)
 
 	_, _ = p.getChanges(ciName, 0)
+	loggerObj.AssertExpectations(t)
 }
 
-func TestSNOWMethods(t *testing.T) {
-	suite.Run(t, new(SNOWTestSuite))
+func TestServiceNowMethods(t *testing.T) {
+	suite.Run(t, new(ServiceNowTestSuite))
 }
 
 func (s *CITestSuite) TestGetCINoCI() {
@@ -917,18 +1218,18 @@ func (s *CITestSuite) TestGetCINoCI() {
 		loggerObj.AssertExpectations(t)
 	}()
 
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
 	defer server.Close()
 
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
 
 	loggerObj.On("Debug", fmt.Sprintf("apiCall: %s", apiCall))
@@ -936,18 +1237,19 @@ func (s *CITestSuite) TestGetCINoCI() {
 	loggerObj.On("Error", errorText)
 
 	_ = p.getCI(ciName)
+	loggerObj.AssertExpectations(t)
 }
 
 func testPrepareGetCI(t *testing.T, loggerObj *MockedLogger, ciName string, responseText string) (*httptest.Server, string) {
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
-	snowUrl = server.URL
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
+	serviceNowUrl = server.URL
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
 
@@ -1013,18 +1315,18 @@ func (s *ChangeTestSuite) TestGetChangeNoChange() {
 		loggerObj.AssertExpectations(t)
 	}()
 
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 	ciName := "app-demoapp"
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
 	defer server.Close()
 
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
 
@@ -1036,11 +1338,11 @@ func (s *ChangeTestSuite) TestGetChangeNoChange() {
 }
 
 func testPrepareGetChange(t *testing.T, loggerObj *MockedLogger, ciName string, responseMap map[string]string) *httptest.Server {
-	snowUsername = "testUser"
-	snowPassword = "testPassword"
+	serviceNowUsername = "testUser"
+	serviceNowPassword = "testPassword"
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
-	snowUrl = server.URL
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
+	serviceNowUrl = server.URL
 
 	return server
 }
@@ -1059,11 +1361,10 @@ func (s *ChangeTestSuite) TestGetChangesOneChange() {
 
 	server := testPrepareGetChange(t, loggerObj, ciName, responseMap)
 	defer server.Close()
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
-	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
-
-	loggerObj.On("Debug", fmt.Sprintf("apiCall: %s", apiCall))
+	apiCall := fmt.Sprintf("%s%s", serviceNowUrl, requestURI)
+	loggerObj.On("Debug", "apiCall: "+apiCall)
 	loggerObj.On("Debug", responseText)
 
 	changes, number := p.getChanges(ciName, 0)
@@ -1089,11 +1390,10 @@ func (s *ChangeTestSuite) TestGetChangesTwoChanges() {
 
 	server := testPrepareGetChange(t, loggerObj, ciName, responseMap)
 	defer server.Close()
+	serviceNowUrl = server.URL
 
-	snowUrl = server.URL
-
-	apiCall := fmt.Sprintf("%s%s", server.URL, requestURI)
-	loggerObj.On("Debug", fmt.Sprintf("apiCall: %s", apiCall))
+	apiCall := fmt.Sprintf("%s%s", serviceNowUrl, requestURI)
+	loggerObj.On("Debug", "apiCall: "+apiCall)
 	loggerObj.On("Debug", responseText)
 
 	changes, number := p.getChanges(ciName, 0)
@@ -1124,7 +1424,7 @@ func (s *ChangeTestSuite) TestGetChangesExactWindowSize() {
 	server := testPrepareGetChange(t, loggerObj, ciName, responseMap)
 	defer server.Close()
 
-	snowUrl = server.URL
+	serviceNowUrl = server.URL
 
 	loggerObj.On("Debug", mock.Anything)
 
@@ -1144,12 +1444,12 @@ func (s *ChangeTestSuite) TestParseChange() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
-	var change_snow = change_snow_type{
+	var change_servicenow = change_servicenow_type{
 		Type:             "1",
 		Number:           "CHG12345",
 		State:            -1.0,
 		Phase:            "1",
-		CMDBCi:           "app-demoapp",
+		CMDBCI:           "app-demoapp",
 		Active:           "1",
 		EndDate:          "2025-05-16 23:59:59",
 		ShortDescription: "Test",
@@ -1158,23 +1458,23 @@ func (s *ChangeTestSuite) TestParseChange() {
 	}
 
 	loggerObj.On("Debug", fmt.Sprintf("Change: Type: %s, Short description: %s, Start Date: %s, End Date: %s",
-		change_snow.Type,
-		change_snow.ShortDescription,
-		change_snow.StartDate,
-		change_snow.EndDate))
+		change_servicenow.Type,
+		change_servicenow.ShortDescription,
+		change_servicenow.StartDate,
+		change_servicenow.EndDate))
 
-	chg := p.parseChange(change_snow)
+	chg := p.parseChange(change_servicenow)
 
-	s.Assertions.Equal(change_snow.Type, chg.Type, "Change type should be the same")
-	s.Assertions.Equal(change_snow.Number, chg.Number, "Change number should be the same")
-	s.Assertions.Equal(change_snow.State, chg.State, "Change state should be the same")
-	s.Assertions.Equal(change_snow.Phase, chg.Phase, "Change phase should be the same")
-	s.Assertions.Equal(change_snow.CMDBCi, chg.CMDBCi, "Change CI should be the same")
-	s.Assertions.Equal(change_snow.Active, chg.Active, "Change active state should be the same")
+	s.Assertions.Equal(change_servicenow.Type, chg.Type, "Change type should be the same")
+	s.Assertions.Equal(change_servicenow.Number, chg.Number, "Change number should be the same")
+	s.Assertions.Equal(change_servicenow.State, chg.State, "Change state should be the same")
+	s.Assertions.Equal(change_servicenow.Phase, chg.Phase, "Change phase should be the same")
+	s.Assertions.Equal(change_servicenow.CMDBCI, chg.CMDBCI, "Change CI should be the same")
+	s.Assertions.Equal(change_servicenow.Active, chg.Active, "Change active state should be the same")
 	s.Assertions.Equal(time.Date(2025, 05, 16, 23, 59, 59, 0, time.UTC), chg.EndDate, "Change end date should be the same")
-	s.Assertions.Equal(change_snow.ShortDescription, chg.ShortDescription, "Change short description should be the same")
+	s.Assertions.Equal(change_servicenow.ShortDescription, chg.ShortDescription, "Change short description should be the same")
 	s.Assertions.Equal(time.Date(2025, 05, 16, 8, 0, 0, 0, time.UTC), chg.StartDate, "Change start date should be the same")
-	s.Assertions.Equal(change_snow.Approval, chg.Approval, "Change approval state should be the same")
+	s.Assertions.Equal(change_servicenow.Approval, chg.Approval, "Change approval state should be the same")
 
 	loggerObj.AssertExpectations(t)
 }
@@ -1187,7 +1487,7 @@ func testAllowedCIStatus(s *CheckCITestSuite, status string) {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
-	var ci = cmdb_snow_type{
+	var ci = cmdb_servicenow_type{
 		InstallStatus: status,
 		Name:          "whatever",
 	}
@@ -1201,7 +1501,7 @@ func testNotAllowedCIStatus(s *CheckCITestSuite, status string) {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
-	var ci = cmdb_snow_type{
+	var ci = cmdb_servicenow_type{
 		InstallStatus: status,
 		Name:          "whatever",
 	}
@@ -1256,7 +1556,7 @@ func testChangeTimeIncorrect(s *CheckChangeTestSuite, currentTime time.Time, sta
 		Number:           "CHG12345",
 		State:            -1.0,
 		Phase:            "1",
-		CMDBCi:           "app-demoapp",
+		CMDBCI:           "app-demoapp",
 		Active:           "1",
 		EndDate:          endDate,
 		ShortDescription: "Test",
@@ -1301,7 +1601,7 @@ func (s *CheckChangeTestSuite) TestCheckChangeCorrectTime() {
 		Number:           "CHG12345",
 		State:            -1.0,
 		Phase:            "1",
-		CMDBCi:           "app-demoapp",
+		CMDBCI:           "app-demoapp",
 		Active:           "1",
 		EndDate:          endDate,
 		ShortDescription: "Test",
@@ -1331,7 +1631,7 @@ func TestCheckChange(t *testing.T) {
 	suite.Run(t, new(CheckChangeTestSuite))
 }
 
-func simulateGlobalHttpRequestToSNOW(startDateString string, endDateString string, installStatus string) *httptest.Server {
+func simulateGlobalHttpRequestToServiceNow(startDateString string, endDateString string, installStatus string) *httptest.Server {
 
 	var response string
 
@@ -1368,7 +1668,7 @@ func testGetArApp() (api.AccessRequest, argocd.Application) {
 	app.ObjectMeta.Name = "demoapp"
 
 	var m map[string]string = make(map[string]string)
-	m["ci_name"] = "app-demoapp"
+	m["ci-name"] = "app-demoapp"
 	app.ObjectMeta.Labels = m
 
 	return ar, app
@@ -1415,15 +1715,15 @@ func (s *PublicMethodsTestSuite) TestGrantAccess() {
 	responseText = fmt.Sprintf(`{"result":[{"type":"1", "number":"CHG300030", "short_description":"valid change", "start_date":"%s", "end_date":"%s"}]}`, startDateString, endDateString)
 	responseMap[requestURI] = responseText
 
-	server := simulateSimpleHttpRequestToSNOW(t, responseMap)
+	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)
 	defer server.Close()
 
 	os.Setenv("SERVICE_NOW_URL", server.URL)
 
-	secretName := "snow-secret"
+	secretName := "servicenow-secret"
 	namespace := "argocd-ephemeral-access"
-	genericUsername := "SNOWUsername"
-	genericPassword := "SNOWPassword"
+	genericUsername := "serviceNowUsername"
+	genericPassword := "serviceNowPassword"
 
 	setCredentialsSecret(namespace, secretName, genericUsername, genericPassword)
 
@@ -1442,11 +1742,11 @@ func (s *PublicMethodsTestSuite) TestGrantAccessNoCIName() {
 
 	p, loggerObj := testGetPlugin()
 
-	errorText := "No CI name found: expected label with name ci_name in application demoapp"
+	errorText := "No CI name found: expected label with name ci-name in application demoapp"
 
 	ar, app := testGetArApp()
 	var m map[string]string = make(map[string]string)
-	m["ci_name"] = "\"\""
+	m["ci-name"] = "\"\""
 	app.ObjectMeta.Labels = m
 
 	unittest = true
@@ -1474,7 +1774,7 @@ func (s *PublicMethodsTestSuite) TestGrantAccessIncorrectCI() {
 	startDateString := "2025-01-01 00:00:00"
 	endDateString := "2025-01-01 23:59:59"
 	installStatus := "-1"
-	server := simulateGlobalHttpRequestToSNOW(startDateString, endDateString, installStatus)
+	server := simulateGlobalHttpRequestToServiceNow(startDateString, endDateString, installStatus)
 	defer server.Close()
 	os.Setenv("SERVICE_NOW_URL", server.URL)
 
@@ -1503,7 +1803,7 @@ func (s *PublicMethodsTestSuite) TestGrantAccessNoChange() {
 	startDateString := "2025-01-01 00:00:00"
 	endDateString := "2025-01-01 23:59:59"
 	installStatus := "1"
-	server := simulateGlobalHttpRequestToSNOW(startDateString, endDateString, installStatus)
+	server := simulateGlobalHttpRequestToServiceNow(startDateString, endDateString, installStatus)
 	defer server.Close()
 	os.Setenv("SERVICE_NOW_URL", server.URL)
 
