@@ -42,29 +42,21 @@ type cmdb_results_service_now_type struct {
 }
 
 type change_servicenow_type struct {
-	Type             string  `json:"type"`
-	Number           string  `json:"number"`
-	State            float64 `json:"state"`
-	Phase            string  `json:"phase"`
-	CMDBCI           string  `json:"cmdb_ci"`
-	Active           string  `json:"active"`
-	EndDate          string  `json:"end_date"`
-	ShortDescription string  `json:"short_description"`
-	StartDate        string  `json:"start_date"`
-	Approval         string  `json:"approval"`
+	Type             string `json:"type"`
+	Number           string `json:"number"`
+	EndDate          string `json:"end_date"`
+	ShortDescription string `json:"short_description"`
+	StartDate        string `json:"start_date"`
+	SysId            string `json:"sys_id"`
 }
 
 type change_type struct {
 	Type             string
 	Number           string
-	State            float64
-	Phase            string
-	CMDBCI           string
-	Active           string
 	EndDate          time.Time
 	ShortDescription string
 	StartDate        time.Time
-	Approval         string
+	SysId            string
 }
 
 type change_results_servicenow_type struct {
@@ -367,7 +359,7 @@ func (p *ServiceNowPlugin) getCI(ciName string) *cmdb_servicenow_type {
 
 func (p *ServiceNowPlugin) getChanges(ciName string, sysparm_offset int) ([]*change_servicenow_type, int) {
 
-	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=%d&sysparm_offset=%d", ciName, sysparm_limit, sysparm_offset)
+	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=%d&sysparm_offset=%d", ciName, sysparm_limit, sysparm_offset)
 	response := p.getFromServiceNowAPI(requestURI)
 
 	var changeResults change_results_servicenow_type
@@ -390,22 +382,20 @@ func (p *ServiceNowPlugin) getChanges(ciName string, sysparm_offset int) ([]*cha
 func (p *ServiceNowPlugin) parseChange(changeServiceNow change_servicenow_type) change_type {
 	var change change_type
 
-	p.Logger.Debug(fmt.Sprintf("Change: Type: %s, Short description: %s, Start Date: %s, End Date: %s",
+	p.Logger.Debug(fmt.Sprintf("Change: Type: %s, Number: %s, Short description: %s, Start Date: %s, End Date: %s, SysId: %s",
 		changeServiceNow.Type,
+		changeServiceNow.Number,
 		changeServiceNow.ShortDescription,
 		changeServiceNow.StartDate,
-		changeServiceNow.EndDate))
+		changeServiceNow.EndDate,
+		changeServiceNow.SysId))
 
 	change.Type = changeServiceNow.Type
 	change.Number = changeServiceNow.Number
-	change.State = changeServiceNow.State
-	change.Phase = changeServiceNow.Phase
-	change.CMDBCI = changeServiceNow.CMDBCI
-	change.Active = changeServiceNow.Active
-	change.Approval = changeServiceNow.Approval
 	change.ShortDescription = changeServiceNow.ShortDescription
 	change.StartDate = p.convertTime(changeServiceNow.StartDate)
 	change.EndDate = p.convertTime(changeServiceNow.EndDate)
+	change.SysId = changeServiceNow.SysId
 
 	return change
 }

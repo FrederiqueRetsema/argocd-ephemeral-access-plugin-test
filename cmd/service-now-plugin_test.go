@@ -498,7 +498,7 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChanges() {
 	endDate := currentTime.Add(time.Hour * 2)
 
 	ciName := "app-demoapp"
-	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
+	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0", ciName)
 	responseText := fmt.Sprintf(`{"result":[{"type":"1", "number":"CHG300030", "short_description":"test", "start_date":"%s", "end_date":"%s"}]}`,
 		testConvertTimeToString(startDate),
 		testConvertTimeToString(endDate))
@@ -536,7 +536,7 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChangesTwoWindows() {
 	ciName := "app-demoapp"
 	var responseMap map[string]string = make(map[string]string)
 
-	requestURI := "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0"
+	requestURI := "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0"
 	responseText := `{"result":[{"type":"1", "number":"CHG300030", "short_description":"test", "start_date":"2025-05-15 17:00:00", "end_date":"2025-05-15 17:45:00"},
                                 {"type":"1", "number":"CHG300031", "short_description":"test2", "start_date":"2025-05-15 18:00:00", "end_date":"2025-05-15 18:45:00"},
                                 {"type":"1", "number":"CHG300032", "short_description":"test3", "start_date":"2025-05-15 19:00:00", "end_date":"2025-05-15 19:45:00"},
@@ -545,7 +545,7 @@ func (s *PluginHelperMethodsTestSuite) TestProcessChangesTwoWindows() {
 
 	responseMap[requestURI] = responseText
 
-	requestURI = "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=5"
+	requestURI = "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=5"
 	responseText = fmt.Sprintf(`{"result":[{"type":"1", "number":"CHG300040", "short_description":"test6", "start_date":"2025-05-15 17:00:00", "end_date":"2025-05-15 17:45:00"},
                                 {"type":"1", "number":"CHG300041", "short_description":"test7", "start_date":"2025-05-15 18:00:00", "end_date":"2025-05-15 18:45:00"},
                                 {"type":"1", "number":"CHG300042", "short_description":"test8", "start_date":"2025-05-15 19:00:00", "end_date":"2025-05-15 19:45:00"},
@@ -1140,7 +1140,7 @@ func (s *ServiceNowTestSuite) TestGetChangeServerDown() {
 	serviceNowUsername = "testUser"
 	serviceNowPassword = "testPassword"
 	ciName := "app-demoapp"
-	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
+	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
@@ -1179,7 +1179,7 @@ func (s *ServiceNowTestSuite) TestGetChangeNoJSON() {
 	serviceNowUsername = "testUser"
 	serviceNowPassword = "testPassword"
 	ciName := "app-demoapp"
-	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
+	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
@@ -1318,7 +1318,7 @@ func (s *ChangeTestSuite) TestGetChangeNoChange() {
 	serviceNowUsername = "testUser"
 	serviceNowPassword = "testPassword"
 	ciName := "app-demoapp"
-	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
+	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
@@ -1354,7 +1354,7 @@ func (s *ChangeTestSuite) TestGetChangesOneChange() {
 
 	ciName := "app-demoapp"
 	responseText := `{"result":[{"type":"1", "number":"CHG300030", "short_description":"test", "start_date":"2025-05-15 17:00:00", "end_date":"2025-05-15 17:45:00"}]}`
-	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
+	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0", ciName)
 
 	var responseMap map[string]string = make(map[string]string)
 	responseMap[requestURI] = responseText
@@ -1381,7 +1381,7 @@ func (s *ChangeTestSuite) TestGetChangesTwoChanges() {
 	p, loggerObj := testGetPlugin()
 
 	ciName := "app-demoapp"
-	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
+	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0", ciName)
 	responseText := `{"result":[{"type":"1", "number":"CHG300030", "short_description":"test", "start_date":"2025-05-15 17:00:00", "end_date":"2025-05-15 17:45:00"},
                                 {"type":"1", "number":"CHG300031", "short_description":"test2", "start_date":"2025-05-15 18:00:00", "end_date":"2025-05-15 18:45:00"}]}`
 
@@ -1411,7 +1411,7 @@ func (s *ChangeTestSuite) TestGetChangesExactWindowSize() {
 	p, loggerObj := testGetPlugin()
 
 	ciName := "app-demoapp"
-	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0", ciName)
+	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0", ciName)
 	responseText := `{"result":[{"type":"1", "number":"CHG300030", "short_description":"test", "start_date":"2025-05-15 17:00:00", "end_date":"2025-05-15 17:45:00"},
                                 {"type":"1", "number":"CHG300031", "short_description":"test2", "start_date":"2025-05-15 18:00:00", "end_date":"2025-05-15 18:45:00"},
                                 {"type":"1", "number":"CHG300032", "short_description":"test3", "start_date":"2025-05-15 19:00:00", "end_date":"2025-05-15 19:45:00"},
@@ -1447,34 +1447,28 @@ func (s *ChangeTestSuite) TestParseChange() {
 	var change_servicenow = change_servicenow_type{
 		Type:             "1",
 		Number:           "CHG12345",
-		State:            -1.0,
-		Phase:            "1",
-		CMDBCI:           "app-demoapp",
-		Active:           "1",
 		EndDate:          "2025-05-16 23:59:59",
 		ShortDescription: "Test",
 		StartDate:        "2025-05-16 08:00:00",
-		Approval:         "1",
+		SysId:            "sys_id",
 	}
 
-	loggerObj.On("Debug", fmt.Sprintf("Change: Type: %s, Short description: %s, Start Date: %s, End Date: %s",
+	loggerObj.On("Debug", fmt.Sprintf("Change: Type: %s, Number: %s, Short description: %s, Start Date: %s, End Date: %s, SysId: %s",
 		change_servicenow.Type,
+		change_servicenow.Number,
 		change_servicenow.ShortDescription,
 		change_servicenow.StartDate,
-		change_servicenow.EndDate))
+		change_servicenow.EndDate,
+		change_servicenow.SysId))
 
 	chg := p.parseChange(change_servicenow)
 
 	s.Assertions.Equal(change_servicenow.Type, chg.Type, "Change type should be the same")
 	s.Assertions.Equal(change_servicenow.Number, chg.Number, "Change number should be the same")
-	s.Assertions.Equal(change_servicenow.State, chg.State, "Change state should be the same")
-	s.Assertions.Equal(change_servicenow.Phase, chg.Phase, "Change phase should be the same")
-	s.Assertions.Equal(change_servicenow.CMDBCI, chg.CMDBCI, "Change CI should be the same")
-	s.Assertions.Equal(change_servicenow.Active, chg.Active, "Change active state should be the same")
 	s.Assertions.Equal(time.Date(2025, 05, 16, 23, 59, 59, 0, time.UTC), chg.EndDate, "Change end date should be the same")
 	s.Assertions.Equal(change_servicenow.ShortDescription, chg.ShortDescription, "Change short description should be the same")
 	s.Assertions.Equal(time.Date(2025, 05, 16, 8, 0, 0, 0, time.UTC), chg.StartDate, "Change start date should be the same")
-	s.Assertions.Equal(change_servicenow.Approval, chg.Approval, "Change approval state should be the same")
+	s.Assertions.Equal(change_servicenow.SysId, chg.SysId, "Change sys_id should be the same")
 
 	loggerObj.AssertExpectations(t)
 }
@@ -1554,14 +1548,10 @@ func testChangeTimeIncorrect(s *CheckChangeTestSuite, currentTime time.Time, sta
 	var change = change_type{
 		Type:             "1",
 		Number:           "CHG12345",
-		State:            -1.0,
-		Phase:            "1",
-		CMDBCI:           "app-demoapp",
-		Active:           "1",
 		EndDate:          endDate,
 		ShortDescription: "Test",
 		StartDate:        startDate,
-		Approval:         "1",
+		SysId:            "1",
 	}
 
 	expectedErrorText := fmt.Sprintf("Change %s (%s) is not in the valid time range. start date: %s and end date: %s (current date: %s)",
@@ -1599,14 +1589,9 @@ func (s *CheckChangeTestSuite) TestCheckChangeCorrectTime() {
 	var change = change_type{
 		Type:             "1",
 		Number:           "CHG12345",
-		State:            -1.0,
-		Phase:            "1",
-		CMDBCI:           "app-demoapp",
-		Active:           "1",
 		EndDate:          endDate,
 		ShortDescription: "Test",
 		StartDate:        startDate,
-		Approval:         "1",
 	}
 
 	expectedErrorText := ""
@@ -1642,7 +1627,7 @@ func simulateGlobalHttpRequestToServiceNow(startDateString string, endDateString
 		if r.URL.RequestURI() == "/api/now/table/cmdb_ci?name=app-demoapp&sysparm_fields=install_status,name" {
 			response = fmt.Sprintf(`{"result": [{"install_status": "%s", "name": "demoapp"}]}`, installStatus)
 		}
-		if r.URL.RequestURI() == "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0" {
+		if r.URL.RequestURI() == "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0" {
 			response = fmt.Sprintf(`{"result":[{"type":"1", "number":"CHG300030", "short_description":"valid change", "start_date":"%s", "end_date":"%s"}]}`, startDateString, endDateString)
 		}
 
@@ -1711,7 +1696,7 @@ func (s *PublicMethodsTestSuite) TestGrantAccess() {
 	responseText := `{"result": [{"install_status": "1", "name": "demoapp"}]}`
 	responseMap[requestURI] = responseText
 
-	requestURI = "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date&sysparm_limit=5&sysparm_offset=0"
+	requestURI = "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0"
 	responseText = fmt.Sprintf(`{"result":[{"type":"1", "number":"CHG300030", "short_description":"valid change", "start_date":"%s", "end_date":"%s"}]}`, startDateString, endDateString)
 	responseMap[requestURI] = responseText
 
