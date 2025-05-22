@@ -20,10 +20,10 @@ spec:
       containers:
         - name: controller
           env:
-            - name: SNOW_SECRET_NAME
-              value: CHANGE_THIS_WITH_THE_SNOW_SECRET_NAME
+            - name: SERVICENOW_SECRET_NAME
+              value: CHANGE_THIS_WITH_THE_SERVICENOW_SECRET_NAME
             - name: SERVICE_NOW_URL
-              value: CHANGE_THIS_TO_POINT_TO_YOUR_SNOW_URL
+              value: CHANGE_THIS_TO_POINT_TO_YOUR_SERVICENOW_URL
             - name: TIMEZONE
               value: Europe/Amsterdam
             - name: SECRET_NAMESPACE
