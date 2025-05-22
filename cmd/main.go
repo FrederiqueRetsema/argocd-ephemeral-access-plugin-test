@@ -296,19 +296,8 @@ func (p *ServiceNowPlugin) doRequest(requestURI string) *http.Response {
 	return resp
 }
 
-func (p *ServiceNowPlugin) getFromServiceNowAPI(requestURI string) []byte {
+func (p *ServiceNowPlugin) checkAPIResult(resp *http.Response, body []byte) []byte {
 
-	resp := p.doRequest(requestURI)
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		errorText := "Error in io.ReadAll: " + err.Error()
-		p.Logger.Error(errorText)
-		panic(errorText)
-	}
-
-	p.Logger.Debug(string(body))
 	if (resp.StatusCode >= 500 && resp.StatusCode <= 599) || strings.Contains(string(body), "<html>") {
 		errorText := "ServiceNow API server is down"
 		p.Logger.Error(errorText)
@@ -322,6 +311,56 @@ func (p *ServiceNowPlugin) getFromServiceNowAPI(requestURI string) []byte {
 	}
 
 	return body
+}
+
+func (p *ServiceNowPlugin) getFromServiceNowAPI(requestURI string) []byte {
+
+	resp := p.doRequest(requestURI)
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		errorText := "Error in io.ReadAll: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
+	}
+
+	p.Logger.Debug(string(body))
+	return p.checkAPIResult(resp, body)
+}
+
+func (p *ServiceNowPlugin) patchServiceNowAPI(requestURI string, data string) []byte {
+
+	apiCall := fmt.Sprintf("%s%s", serviceNowUrl, requestURI)
+	p.Logger.Debug("apiCall: " + apiCall)
+
+	req, err := http.NewRequest("PATCH", apiCall, strings.NewReader(data))
+	if err != nil {
+		errorText := "Error in NewRequest: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		errorText := "Error in client.Do: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		errorText := "Error in io.ReadAll: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
+	}
+
+	p.Logger.Debug(string(body))
+	return p.checkAPIResult(resp, body)
 }
 
 func (p *ServiceNowPlugin) getGlobalVars() {
@@ -478,6 +517,12 @@ func (p *ServiceNowPlugin) processChanges(ciName string) (string, time.Duration,
 	return errorString, changeRemainingTime, validChange
 }
 
+func (p *ServiceNowPlugin) postNote(sysId string, noteText string) {
+	requestURI := fmt.Sprintf("/api/now/table/change_request/%s", sysId)
+
+	p.patchServiceNowAPI(requestURI, noteText)
+}
+
 // Public methods
 
 func (p *ServiceNowPlugin) Init() error {
@@ -530,8 +575,9 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 		grantedAccessText, grantedUIText := p.determineGrantedTexts(requesterName, requestedRole, *validChange, duration, endDateTime)
 		p.Logger.Info(grantedAccessText)
-
 		p.Logger.Debug(grantedUIText)
+
+		p.postNote(validChange.SysId, grantedUIText)
 		return p.grant(grantedUIText)
 	} else {
 		p.Logger.Error(fmt.Sprintf("Access Denied for %s, role %s: %s", requesterName, requestedRole, errorString))
