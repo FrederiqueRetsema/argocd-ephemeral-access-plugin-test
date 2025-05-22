@@ -692,7 +692,7 @@ func (s *PluginHelperMethodsTestSuite) TestDetermineGrantedTexts() {
 
 	var remainingTime time.Duration = 1 * time.Hour
 
-	grantedAccessText, grantedAccessUIText := p.determineGrantedTexts(requesterName, requestedRole, validChange, remainingTime, realEndDate)
+	grantedAccessText, grantedAccessUIText, grantedAccessServiceNowText := p.determineGrantedTexts(requesterName, requestedRole, validChange, remainingTime, realEndDate)
 
 	expectedGrantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s, from %s to %s",
 		requesterName,
@@ -709,8 +709,15 @@ func (s *PluginHelperMethodsTestSuite) TestDetermineGrantedTexts() {
 		realEndDate,
 		remainingTime.Truncate(time.Second).String())
 
+	expectedGrantedAccessServiceNowText := fmt.Sprintf("Granted access: to %s, for role %s, until %s (%s)",
+		requesterName,
+		requestedRole,
+		realEndDate,
+		remainingTime.Truncate(time.Second).String())
+
 	s.Assertions.Equal(expectedGrantedAccessText, grantedAccessText, "Granted access text should be what is expected")
 	s.Assertions.Equal(expectedGrantedAccessUIText, grantedAccessUIText, "Granted access text for UI should be what is expected")
+	s.Assertions.Equal(expectedGrantedAccessServiceNowText, grantedAccessServiceNowText, "Granted access text for ServiceNow should be what is expected")
 
 	loggerObj.AssertExpectations(t)
 }
@@ -1697,7 +1704,11 @@ func (s *PublicMethodsTestSuite) TestGrantAccess() {
 	responseMap[requestURI] = responseText
 
 	requestURI = "/api/now/table/change_request?cmdb_ci=app-demoapp&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=5&sysparm_offset=0"
-	responseText = fmt.Sprintf(`{"result":[{"type":"1", "number":"CHG300030", "short_description":"valid change", "start_date":"%s", "end_date":"%s"}]}`, startDateString, endDateString)
+	responseText = fmt.Sprintf(`{"result":[{"type":"1", "number":"CHG300030", "short_description":"valid change", "start_date":"%s", "end_date":"%s", "sys_id":"1"}]}`, startDateString, endDateString)
+	responseMap[requestURI] = responseText
+
+	requestURI = "/api/now/table/change_request/1" // for post, but whatever. We don't do anything with the response...
+	responseText = `{"whatever":"true"}`
 	responseMap[requestURI] = responseText
 
 	server := simulateSimpleHttpRequestToServiceNow(t, responseMap)

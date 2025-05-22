@@ -231,7 +231,7 @@ func (p *ServiceNowPlugin) determineDurationAndRealEndTime(arDuration time.Durat
 	return duration, realEndTime
 }
 
-func (p *ServiceNowPlugin) determineGrantedTexts(requesterName string, requestedRole string, validChange change_type, remainingTime time.Duration, realEndDate time.Time) (string, string) {
+func (p *ServiceNowPlugin) determineGrantedTexts(requesterName string, requestedRole string, validChange change_type, remainingTime time.Duration, realEndDate time.Time) (string, string, string) {
 
 	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s, from %s to %s",
 		requesterName,
@@ -247,7 +247,14 @@ func (p *ServiceNowPlugin) determineGrantedTexts(requesterName string, requested
 		validChange.ShortDescription,
 		realEndDate,
 		remainingTime.Truncate(time.Second).String())
-	return grantedAccessText, grantedAccessUIText
+
+	grantedAccessServiceNowText := fmt.Sprintf("Granted access: to %s, for role %s, until %s (%s)",
+		requesterName,
+		requestedRole,
+		realEndDate,
+		remainingTime.Truncate(time.Second).String())
+
+	return grantedAccessText, grantedAccessUIText, grantedAccessServiceNowText
 }
 
 func (p *ServiceNowPlugin) deny(reason string) (*plugin.GrantResponse, error) {
@@ -271,7 +278,7 @@ func (p *ServiceNowPlugin) getServiceNowCredentials() (string, string) {
 	return p.getCredentialsFromSecret(namespace, secretName, "username", "password")
 }
 
-func (p *ServiceNowPlugin) doRequest(requestURI string) *http.Response {
+func (p *ServiceNowPlugin) doGetRequest(requestURI string) *http.Response {
 	apiCall := fmt.Sprintf("%s%s", serviceNowUrl, requestURI)
 	p.Logger.Debug("apiCall: " + apiCall)
 
@@ -315,7 +322,7 @@ func (p *ServiceNowPlugin) checkAPIResult(resp *http.Response, body []byte) []by
 
 func (p *ServiceNowPlugin) getFromServiceNowAPI(requestURI string) []byte {
 
-	resp := p.doRequest(requestURI)
+	resp := p.doGetRequest(requestURI)
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
@@ -333,6 +340,7 @@ func (p *ServiceNowPlugin) patchServiceNowAPI(requestURI string, data string) []
 
 	apiCall := fmt.Sprintf("%s%s", serviceNowUrl, requestURI)
 	p.Logger.Debug("apiCall: " + apiCall)
+	p.Logger.Debug("Data: " + string(data))
 
 	req, err := http.NewRequest("PATCH", apiCall, strings.NewReader(data))
 	if err != nil {
@@ -341,7 +349,8 @@ func (p *ServiceNowPlugin) patchServiceNowAPI(requestURI string, data string) []
 		panic(errorText)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Add("Accept", "application/json")
+	req.SetBasicAuth(serviceNowUsername, serviceNowPassword)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -573,11 +582,12 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		jsonAr, _ := json.Marshal(ar)
 		p.Logger.Debug(string(jsonAr))
 
-		grantedAccessText, grantedUIText := p.determineGrantedTexts(requesterName, requestedRole, *validChange, duration, endDateTime)
+		grantedAccessText, grantedUIText, grantedAccessServiceNowText := p.determineGrantedTexts(requesterName, requestedRole, *validChange, duration, endDateTime)
 		p.Logger.Info(grantedAccessText)
 		p.Logger.Debug(grantedUIText)
 
-		p.postNote(validChange.SysId, grantedUIText)
+		note := fmt.Sprintf("{\"work_notes\":\"%s\"}", grantedAccessServiceNowText)
+		p.postNote(validChange.SysId, note)
 		return p.grant(grantedUIText)
 	} else {
 		p.Logger.Error(fmt.Sprintf("Access Denied for %s, role %s: %s", requesterName, requestedRole, errorString))
