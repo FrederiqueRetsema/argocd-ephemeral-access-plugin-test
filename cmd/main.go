@@ -71,7 +71,7 @@ var serviceNowUrl string
 var serviceNowUsername string
 var serviceNowPassword string
 var ciLabel string
-var excludedGroups []string
+var exclusionGroups []string
 var timezone string
 var k8sconfig *rest.Config
 var k8sclientset kubernetes.Interface
@@ -97,7 +97,10 @@ func (p *ServiceNowPlugin) getEnvVarWithDefault(envVarName string, envVarDefault
 func (p *ServiceNowPlugin) getLocalTime(t time.Time) string {
 	loc, _ := time.LoadLocation(timezone)
 
-	return fmt.Sprintf("%02d:%02d:%02d",
+	return fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d",
+		t.In(loc).Year(),
+		t.In(loc).Month(),
+		t.In(loc).Day(),
 		t.In(loc).Hour(),
 		t.In(loc).Minute(),
 		t.In(loc).Second())
@@ -148,8 +151,8 @@ func (p *ServiceNowPlugin) getGlobalVars() {
 	serviceNowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "No Service Now URL given (environment variable SERVICE_NOW_URL is empty)")
 	timezone = p.getEnvVarWithDefault("TIMEZONE", "UTC")
 	ciLabel = p.getEnvVarWithDefault("CI_LABEL", "ci-name")
-	excludedGroupsString := p.getEnvVarWithDefault("EXCLUDED_GROUPS", "")
-	excludedGroups = strings.Split(excludedGroupsString, ",")
+	exclusionGroupsString := p.getEnvVarWithDefault("EXCLUSION_GROUPS", "")
+	exclusionGroups = strings.Split(exclusionGroupsString, ",")
 	p.getK8sConfig()
 
 	serviceNowUsername, serviceNowPassword = p.getServiceNowCredentials()
@@ -243,19 +246,19 @@ func (p *ServiceNowPlugin) determineGrantedTextsChange(requesterName string, req
 		validChange.Number,
 		validChange.ShortDescription,
 		requestedRole,
-		p.getLocalTime(time.Now()),
-		p.getLocalTime(realEndDate))
+		time.Now().Truncate(time.Minute),
+		realEndDate.Truncate(time.Second).String())
 
 	grantedAccessUIText := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__",
 		validChange.Number,
 		validChange.ShortDescription,
-		realEndDate,
+		p.getLocalTime(realEndDate),
 		remainingTime.Truncate(time.Second).String())
 
 	grantedAccessServiceNowText := fmt.Sprintf("ServiceNow plugin granted access to %s, for role %s, until %s (%s)",
 		requesterName,
 		requestedRole,
-		realEndDate,
+		p.getLocalTime(realEndDate),
 		remainingTime.Truncate(time.Second).String())
 
 	p.Logger.Info(grantedAccessText)
@@ -269,15 +272,15 @@ func (p *ServiceNowPlugin) determineGrantedTextsExclusions(requesterName string,
 	grantedAccessText := fmt.Sprintf("Granted access for %s: role %s, from %s to %s (no change, %s is part of the exclusion group)",
 		requesterName,
 		requestedRole,
-		p.getLocalTime(time.Now()),
-		p.getLocalTime(realEndDate),
+		time.Now().Truncate(time.Minute),
+		realEndDate.Truncate(time.Minute),
 		requestedRole)
 
 	grantedAccessUIText := fmt.Sprintf("Granted access: part of exclusion group, until __%s (%s)__",
-		realEndDate,
+		p.getLocalTime(realEndDate),
 		remainingTime.Truncate(time.Second).String())
 
-	p.Logger.Info(grantedAccessText)
+	p.Logger.Warn(grantedAccessText)
 	p.Logger.Debug(grantedAccessUIText)
 
 	return grantedAccessUIText
@@ -573,7 +576,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 	p.getGlobalVars()
 
-	if slices.Contains(excludedGroups, requestedRole) {
+	if slices.Contains(exclusionGroups, requestedRole) {
 		endTime := time.Now().Add(arDuration)
 		grantedUIText := p.determineGrantedTextsExclusions(requesterName, requestedRole, arDuration, endTime)
 
