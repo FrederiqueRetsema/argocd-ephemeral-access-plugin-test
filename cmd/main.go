@@ -71,6 +71,7 @@ var serviceNowUrl string
 var serviceNowUsername string
 var serviceNowPassword string
 var ciLabel string
+var excludedGroups []string
 var timezone string
 var k8sconfig *rest.Config
 var k8sclientset kubernetes.Interface
@@ -147,6 +148,8 @@ func (p *ServiceNowPlugin) getGlobalVars() {
 	serviceNowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "No Service Now URL given (environment variable SERVICE_NOW_URL is empty)")
 	timezone = p.getEnvVarWithDefault("TIMEZONE", "UTC")
 	ciLabel = p.getEnvVarWithDefault("CI_LABEL", "ci-name")
+	excludedGroupsString := p.getEnvVarWithDefault("EXCLUDED_GROUPS", "")
+	excludedGroups = strings.Split(excludedGroupsString, ",")
 	p.getK8sConfig()
 
 	serviceNowUsername, serviceNowPassword = p.getServiceNowCredentials()
@@ -232,7 +235,7 @@ func (p *ServiceNowPlugin) determineDurationAndRealEndTime(arDuration time.Durat
 	return duration, realEndTime
 }
 
-func (p *ServiceNowPlugin) determineGrantedTexts(requesterName string, requestedRole string, validChange Change, remainingTime time.Duration, realEndDate time.Time) (string, string, string) {
+func (p *ServiceNowPlugin) determineGrantedTextsChange(requesterName string, requestedRole string, validChange Change, remainingTime time.Duration, realEndDate time.Time) (string, string) {
 
 	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s, from %s to %s",
 		requesterName,
@@ -241,7 +244,7 @@ func (p *ServiceNowPlugin) determineGrantedTexts(requesterName string, requested
 		validChange.ShortDescription,
 		requestedRole,
 		p.getLocalTime(time.Now()),
-		p.getLocalTime(validChange.EndDate))
+		p.getLocalTime(realEndDate))
 
 	grantedAccessUIText := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__",
 		validChange.Number,
@@ -255,7 +258,29 @@ func (p *ServiceNowPlugin) determineGrantedTexts(requesterName string, requested
 		realEndDate,
 		remainingTime.Truncate(time.Second).String())
 
-	return grantedAccessText, grantedAccessUIText, grantedAccessServiceNowText
+	p.Logger.Info(grantedAccessText)
+	p.Logger.Debug(grantedAccessUIText)
+
+	return grantedAccessUIText, grantedAccessServiceNowText
+}
+
+func (p *ServiceNowPlugin) determineGrantedTextsExclusions(requesterName string, requestedRole string, remainingTime time.Duration, realEndDate time.Time) string {
+
+	grantedAccessText := fmt.Sprintf("Granted access for %s: role %s, from %s to %s (no change, %s is part of the exclusion group)",
+		requesterName,
+		requestedRole,
+		p.getLocalTime(time.Now()),
+		p.getLocalTime(realEndDate),
+		requestedRole)
+
+	grantedAccessUIText := fmt.Sprintf("Granted access: part of exclusion group, until __%s (%s)__",
+		realEndDate,
+		remainingTime.Truncate(time.Second).String())
+
+	p.Logger.Info(grantedAccessText)
+	p.Logger.Debug(grantedAccessUIText)
+
+	return grantedAccessUIText
 }
 
 func (p *ServiceNowPlugin) denyRequest(reason string) (*plugin.GrantResponse, error) {
@@ -548,6 +573,13 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 	p.getGlobalVars()
 
+	if slices.Contains(excludedGroups, requestedRole) {
+		endTime := time.Now().Add(arDuration)
+		grantedUIText := p.determineGrantedTextsExclusions(requesterName, requestedRole, arDuration, endTime)
+
+		return p.grantRequest(grantedUIText)
+	}
+
 	ciName := p.getCIName(app)
 	if ciName == "\"\"" {
 		errorText := fmt.Sprintf("No CI name found: expected label with name %s in application %s", ciLabel, applicationName)
@@ -576,9 +608,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		jsonAr, _ := json.Marshal(ar)
 		p.Logger.Debug(string(jsonAr))
 
-		grantedAccessText, grantedUIText, grantedAccessServiceNowText := p.determineGrantedTexts(requesterName, requestedRole, *validChange, duration, endDateTime)
-		p.Logger.Info(grantedAccessText)
-		p.Logger.Debug(grantedUIText)
+		grantedUIText, grantedAccessServiceNowText := p.determineGrantedTextsChange(requesterName, requestedRole, *validChange, duration, endDateTime)
 
 		note := fmt.Sprintf("{\"work_notes\":\"%s\"}", grantedAccessServiceNowText)
 		p.postNote(validChange.SysId, note)

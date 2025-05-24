@@ -380,6 +380,7 @@ func (s *PluginHelperMethodsTestSuite) TestGetGlobalVars() {
 	exampleUrl := "https://example.com"
 	os.Setenv("SERVICE_NOW_URL", exampleUrl)
 	os.Setenv("TIMEZONE", "")
+	os.Setenv("EXCLUDED_GROUPS", "")
 
 	secretName := "servicenow-secret"
 	namespace := "argocd-ephemeral-access"
@@ -396,6 +397,63 @@ func (s *PluginHelperMethodsTestSuite) TestGetGlobalVars() {
 	s.Assertions.Equal("UTC", timezone, "Default timezone should be UTC")
 	s.Assertions.Equal(testUsername, serviceNowUsername, "ServiceNow username should be correct")
 	s.Assertions.Equal(testPassword, serviceNowPassword, "ServiceNow password should be correct")
+	s.Assertions.Equal([]string{""}, excludedGroups, "Default for excluded groups is empty")
+	loggerObj.AssertExpectations(t)
+}
+
+func (s *PluginHelperMethodsTestSuite) TestGetGlobalVarsExcludedGroupsWithValue() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+
+	exampleUrl := "https://example.com"
+	os.Setenv("SERVICE_NOW_URL", exampleUrl)
+	os.Setenv("TIMEZONE", "")
+	os.Setenv("EXCLUDED_GROUPS", "administrators")
+
+	secretName := "servicenow-secret"
+	namespace := "argocd-ephemeral-access"
+	testUsername := "my-username"
+	testPassword := "my-password"
+	setCredentialsSecret(namespace, secretName, testUsername, testPassword)
+
+	loggerObj.On("Debug", mock.Anything)
+
+	unittest = true
+	p.getGlobalVars()
+
+	s.Assertions.Equal(exampleUrl, serviceNowUrl, "serviceNowUrl should be retrieved from environment variables")
+	s.Assertions.Equal("UTC", timezone, "Default timezone should be UTC")
+	s.Assertions.Equal(testUsername, serviceNowUsername, "ServiceNow username should be correct")
+	s.Assertions.Equal(testPassword, serviceNowPassword, "ServiceNow password should be correct")
+	s.Assertions.Equal([]string{"administrators"}, excludedGroups, "Excluded groups should be correct")
+	loggerObj.AssertExpectations(t)
+}
+
+func (s *PluginHelperMethodsTestSuite) TestGetGlobalVarsExcludedGroupsWithTwoValues() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+
+	exampleUrl := "https://example.com"
+	os.Setenv("SERVICE_NOW_URL", exampleUrl)
+	os.Setenv("TIMEZONE", "")
+	os.Setenv("EXCLUDED_GROUPS", "administrators,changemanagers")
+
+	secretName := "servicenow-secret"
+	namespace := "argocd-ephemeral-access"
+	testUsername := "my-username"
+	testPassword := "my-password"
+	setCredentialsSecret(namespace, secretName, testUsername, testPassword)
+
+	loggerObj.On("Debug", mock.Anything)
+
+	unittest = true
+	p.getGlobalVars()
+
+	s.Assertions.Equal(exampleUrl, serviceNowUrl, "serviceNowUrl should be retrieved from environment variables")
+	s.Assertions.Equal("UTC", timezone, "Default timezone should be UTC")
+	s.Assertions.Equal(testUsername, serviceNowUsername, "ServiceNow username should be correct")
+	s.Assertions.Equal(testPassword, serviceNowPassword, "ServiceNow password should be correct")
+	s.Assertions.Equal([]string{"administrators", "changemanagers"}, excludedGroups, "Excluded groups should be correct")
 	loggerObj.AssertExpectations(t)
 }
 
@@ -533,7 +591,7 @@ func (s *PluginHelperMethodsTestSuite) TestDetermineDurationAndRealEndTimeArDura
 	loggerObj.AssertExpectations(t)
 }
 
-func (s *PluginHelperMethodsTestSuite) TestDetermineGrantedTexts() {
+func (s *PluginHelperMethodsTestSuite) TestDetermineGrantedTextsChange() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
@@ -548,9 +606,6 @@ func (s *PluginHelperMethodsTestSuite) TestDetermineGrantedTexts() {
 	realEndDate := time.Date(2025, 5, 20, 23, 59, 59, 0, time.UTC)
 
 	var remainingTime time.Duration = 1 * time.Hour
-
-	grantedAccessText, grantedAccessUIText, grantedAccessServiceNowText := p.determineGrantedTexts(requesterName, requestedRole, validChange, remainingTime, realEndDate)
-
 	expectedGrantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s, from %s to %s",
 		requesterName,
 		validChange.Type,
@@ -558,24 +613,55 @@ func (s *PluginHelperMethodsTestSuite) TestDetermineGrantedTexts() {
 		validChange.ShortDescription,
 		requestedRole,
 		p.getLocalTime(time.Now()),
-		p.getLocalTime(validChange.EndDate))
-
+		p.getLocalTime(realEndDate))
 	expectedGrantedAccessUIText := fmt.Sprintf("Granted access: change __%s__ (%s), until __%s (%s)__",
 		validChange.Number,
 		validChange.ShortDescription,
 		realEndDate,
 		remainingTime.Truncate(time.Second).String())
-
 	expectedGrantedAccessServiceNowText := fmt.Sprintf("ServiceNow plugin granted access to %s, for role %s, until %s (%s)",
 		requesterName,
 		requestedRole,
 		realEndDate,
 		remainingTime.Truncate(time.Second).String())
 
-	s.Assertions.Equal(expectedGrantedAccessText, grantedAccessText, "Granted access text should be what is expected")
+	loggerObj.On("Info", expectedGrantedAccessText)
+	loggerObj.On("Debug", expectedGrantedAccessUIText)
+
+	grantedAccessUIText, grantedAccessServiceNowText := p.determineGrantedTextsChange(requesterName, requestedRole, validChange, remainingTime, realEndDate)
+
 	s.Assertions.Equal(expectedGrantedAccessUIText, grantedAccessUIText, "Granted access text for UI should be what is expected")
 	s.Assertions.Equal(expectedGrantedAccessServiceNowText, grantedAccessServiceNowText, "Granted access text for ServiceNow should be what is expected")
 
+	loggerObj.AssertExpectations(t)
+}
+
+func (s *PluginHelperMethodsTestSuite) TestDetermineGrantedTextsExclusions() {
+	t := s.T()
+	p, loggerObj := testGetPlugin()
+
+	requesterName := "TestUser"
+	requestedRole := "admin"
+
+	var remainingTime time.Duration = 1 * time.Hour
+	realEndDate := time.Now().Add(remainingTime)
+
+	expectedGrantedAccessText := fmt.Sprintf("Granted access for %s: role %s, from %s to %s (no change, %s is part of the exclusion group)",
+		requesterName,
+		requestedRole,
+		p.getLocalTime(time.Now()),
+		p.getLocalTime(realEndDate),
+		requestedRole)
+	expectedGrantedAccessUIText := fmt.Sprintf("Granted access: part of exclusion group, until __%s (%s)__",
+		realEndDate,
+		remainingTime.Truncate(time.Second).String())
+
+	loggerObj.On("Info", expectedGrantedAccessText)
+	loggerObj.On("Debug", expectedGrantedAccessUIText)
+
+	grantedAccessUIText := p.determineGrantedTextsExclusions(requesterName, requestedRole, remainingTime, realEndDate)
+
+	s.Assertions.Equal(expectedGrantedAccessUIText, grantedAccessUIText, "Granted access text for UI should be what is expected")
 	loggerObj.AssertExpectations(t)
 }
 
@@ -1780,6 +1866,7 @@ func (s *PublicMethodsTestSuite) TestGrantAccess() {
 
 	ar, app := testGetArApp()
 
+	os.Setenv("EXCLUDED_GROUPS", "")
 	os.Setenv("TIMEZONE", "UTC")
 	currentTime := time.Now()
 	startDate := currentTime.Add(-5 * time.Minute)
@@ -1815,6 +1902,32 @@ func (s *PublicMethodsTestSuite) TestGrantAccess() {
 	genericPassword := "serviceNowPassword"
 
 	setCredentialsSecret(namespace, secretName, genericUsername, genericPassword)
+
+	response, err := p.GrantAccess(&ar, &app)
+
+	s.Assertions.Equal(plugin.GrantStatusGranted, response.Status, "Status should be granted")
+	s.Assertions.Equal(nil, err, "Error should be nil")
+	if !strings.Contains(response.Message, "Granted access") {
+		t.Errorf("%s should contain text Granted access", response.Message)
+	}
+	loggerObj.AssertExpectations(t)
+}
+
+func (s *PublicMethodsTestSuite) TestGrantAccessExclusionGroup() {
+	t := s.T()
+
+	p, loggerObj := testGetPlugin()
+
+	unittest = true // don't initialize k8sconfig/k8sclientset
+
+	ar, app := testGetArApp()
+
+	os.Setenv("TIMEZONE", "UTC")
+	loggerObj.On("Debug", mock.Anything)
+	loggerObj.On("Info", mock.Anything)
+
+	os.Setenv("EXCLUDED_GROUPS", "changemanagers")
+	ar.Spec.Role.TemplateRef.Name = "changemanagers"
 
 	response, err := p.GrantAccess(&ar, &app)
 
