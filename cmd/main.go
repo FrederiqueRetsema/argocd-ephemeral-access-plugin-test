@@ -32,16 +32,16 @@ type ServiceNowPlugin struct {
 	Logger hclog.Logger
 }
 
-type cmdb_servicenow_type struct {
+type CmdbServiceNow struct {
 	InstallStatus string `json:"install_status"`
 	Name          string `json:"name"`
 }
 
-type cmdb_results_service_now_type struct {
-	Result []*cmdb_servicenow_type `json:"result"`
+type CmdbResultsServiceNowType struct {
+	Result []*CmdbServiceNow `json:"result"`
 }
 
-type change_servicenow_type struct {
+type ChangeServiceNow struct {
 	Type             string `json:"type"`
 	Number           string `json:"number"`
 	EndDate          string `json:"end_date"`
@@ -50,7 +50,7 @@ type change_servicenow_type struct {
 	SysId            string `json:"sys_id"`
 }
 
-type change_type struct {
+type Change struct {
 	Type             string
 	Number           string
 	EndDate          time.Time
@@ -60,10 +60,10 @@ type change_type struct {
 }
 
 type change_results_servicenow_type struct {
-	Result []*change_servicenow_type `json:"result"`
+	Result []*ChangeServiceNow `json:"result"`
 }
 
-const sysparm_limit = 5
+const SysparmLimit = 5
 
 var unittest = false
 
@@ -143,12 +143,13 @@ func (p *ServiceNowPlugin) getCredentialsFromSecret(namespace string, secretName
 	return string(secret.Data[usernameKey]), string(secret.Data[passwordKey])
 }
 
-func (p *ServiceNowPlugin) getCIName(app *argocd.Application) string {
-	p.Logger.Debug("Search for " + ciLabel + " in the CMDB...")
-	ciName := string(app.ObjectMeta.Labels[ciLabel])
-	p.Logger.Debug(fmt.Sprintf("ciLabel %s found: %s", ciLabel, ciName))
+func (p *ServiceNowPlugin) getGlobalVars() {
+	serviceNowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "No Service Now URL given (environment variable SERVICE_NOW_URL is empty)")
+	timezone = p.getEnvVarWithDefault("TIMEZONE", "UTC")
+	ciLabel = p.getEnvVarWithDefault("CI_LABEL", "ci-name")
+	p.getK8sConfig()
 
-	return ciName
+	serviceNowUsername, serviceNowPassword = p.getServiceNowCredentials()
 }
 
 func (p *ServiceNowPlugin) showRequest(ar *api.AccessRequest, app *argocd.Application) {
@@ -231,7 +232,7 @@ func (p *ServiceNowPlugin) determineDurationAndRealEndTime(arDuration time.Durat
 	return duration, realEndTime
 }
 
-func (p *ServiceNowPlugin) determineGrantedTexts(requesterName string, requestedRole string, validChange change_type, remainingTime time.Duration, realEndDate time.Time) (string, string, string) {
+func (p *ServiceNowPlugin) determineGrantedTexts(requesterName string, requestedRole string, validChange Change, remainingTime time.Duration, realEndDate time.Time) (string, string, string) {
 
 	grantedAccessText := fmt.Sprintf("Granted access for %s: %s change %s (%s), role %s, from %s to %s",
 		requesterName,
@@ -248,7 +249,7 @@ func (p *ServiceNowPlugin) determineGrantedTexts(requesterName string, requested
 		realEndDate,
 		remainingTime.Truncate(time.Second).String())
 
-	grantedAccessServiceNowText := fmt.Sprintf("Granted access: to %s, for role %s, until %s (%s)",
+	grantedAccessServiceNowText := fmt.Sprintf("ServiceNow plugin granted access to %s, for role %s, until %s (%s)",
 		requesterName,
 		requestedRole,
 		realEndDate,
@@ -257,14 +258,14 @@ func (p *ServiceNowPlugin) determineGrantedTexts(requesterName string, requested
 	return grantedAccessText, grantedAccessUIText, grantedAccessServiceNowText
 }
 
-func (p *ServiceNowPlugin) deny(reason string) (*plugin.GrantResponse, error) {
+func (p *ServiceNowPlugin) denyRequest(reason string) (*plugin.GrantResponse, error) {
 	return &plugin.GrantResponse{
 		Status:  plugin.GrantStatusDenied,
 		Message: reason,
 	}, nil
 }
 
-func (p *ServiceNowPlugin) grant(reason string) (*plugin.GrantResponse, error) {
+func (p *ServiceNowPlugin) grantRequest(reason string) (*plugin.GrantResponse, error) {
 	return &plugin.GrantResponse{
 		Status:  plugin.GrantStatusGranted,
 		Message: reason,
@@ -276,31 +277,6 @@ func (p *ServiceNowPlugin) getServiceNowCredentials() (string, string) {
 	secretName := p.getEnvVarWithDefault("SERVICENOW_SECRET_NAME", "servicenow-secret")
 
 	return p.getCredentialsFromSecret(namespace, secretName, "username", "password")
-}
-
-func (p *ServiceNowPlugin) doGetRequest(requestURI string) *http.Response {
-	apiCall := fmt.Sprintf("%s%s", serviceNowUrl, requestURI)
-	p.Logger.Debug("apiCall: " + apiCall)
-
-	req, err := http.NewRequest("GET", apiCall, nil)
-	if err != nil {
-		errorText := "Error in NewRequest: " + err.Error()
-		p.Logger.Error(errorText)
-		panic(errorText)
-	}
-
-	req.Header.Add("Accept", "application/json")
-	req.SetBasicAuth(serviceNowUsername, serviceNowPassword)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		errorText := "Error in client.Do: " + err.Error()
-		p.Logger.Error(errorText)
-		panic(errorText)
-	}
-
-	return resp
 }
 
 func (p *ServiceNowPlugin) checkAPIResult(resp *http.Response, body []byte) []byte {
@@ -322,7 +298,26 @@ func (p *ServiceNowPlugin) checkAPIResult(resp *http.Response, body []byte) []by
 
 func (p *ServiceNowPlugin) getFromServiceNowAPI(requestURI string) []byte {
 
-	resp := p.doGetRequest(requestURI)
+	apiCall := fmt.Sprintf("%s%s", serviceNowUrl, requestURI)
+	p.Logger.Debug("apiCall: " + apiCall)
+
+	req, err := http.NewRequest("GET", apiCall, nil)
+	if err != nil {
+		errorText := "Error in NewRequest: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
+	}
+
+	req.Header.Add("Accept", "application/json")
+	req.SetBasicAuth(serviceNowUsername, serviceNowPassword)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		errorText := "Error in client.Do: " + err.Error()
+		p.Logger.Error(errorText)
+		panic(errorText)
+	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
@@ -368,25 +363,24 @@ func (p *ServiceNowPlugin) patchServiceNowAPI(requestURI string, data string) []
 		panic(errorText)
 	}
 
-	p.Logger.Debug(string(body))
+	p.Logger.Debug("Body: " + string(body))
 	return p.checkAPIResult(resp, body)
 }
 
-func (p *ServiceNowPlugin) getGlobalVars() {
-	serviceNowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "No Service Now URL given (environment variable SERVICE_NOW_URL is empty)")
-	timezone = p.getEnvVarWithDefault("TIMEZONE", "UTC")
-	ciLabel = p.getEnvVarWithDefault("CI_LABEL", "ci-name")
-	p.getK8sConfig()
+func (p *ServiceNowPlugin) getCIName(app *argocd.Application) string {
+	p.Logger.Debug("Search for " + ciLabel + " in the CMDB...")
+	ciName := string(app.ObjectMeta.Labels[ciLabel])
+	p.Logger.Debug(fmt.Sprintf("ciLabel %s found: %s", ciLabel, ciName))
 
-	serviceNowUsername, serviceNowPassword = p.getServiceNowCredentials()
+	return ciName
 }
 
-func (p *ServiceNowPlugin) getCI(ciName string) *cmdb_servicenow_type {
+func (p *ServiceNowPlugin) getCI(ciName string) *CmdbServiceNow {
 
 	requestURI := fmt.Sprintf("/api/now/table/cmdb_ci?name=%s&sysparm_fields=install_status,name", ciName)
 	response := p.getFromServiceNowAPI(requestURI)
 
-	var cmdbResults cmdb_results_service_now_type
+	var cmdbResults CmdbResultsServiceNowType
 	err := json.Unmarshal(response, &cmdbResults)
 	if err != nil {
 		errorText := fmt.Sprintf("Error in json.Unmarshal: %s (%s)", err.Error(), response)
@@ -405,9 +399,9 @@ func (p *ServiceNowPlugin) getCI(ciName string) *cmdb_servicenow_type {
 	return cmdbResults.Result[0]
 }
 
-func (p *ServiceNowPlugin) getChanges(ciName string, sysparm_offset int) ([]*change_servicenow_type, int) {
+func (p *ServiceNowPlugin) getChanges(ciName string, SysparmOffset int) ([]*ChangeServiceNow, int) {
 
-	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=%d&sysparm_offset=%d", ciName, sysparm_limit, sysparm_offset)
+	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=%d&sysparm_offset=%d", ciName, SysparmLimit, SysparmOffset)
 	response := p.getFromServiceNowAPI(requestURI)
 
 	var changeResults change_results_servicenow_type
@@ -424,11 +418,11 @@ func (p *ServiceNowPlugin) getChanges(ciName string, sysparm_offset int) ([]*cha
 		panic(errorText)
 	}
 
-	return changeResults.Result, sysparm_offset + len(changeResults.Result)
+	return changeResults.Result, SysparmOffset + len(changeResults.Result)
 }
 
-func (p *ServiceNowPlugin) parseChange(changeServiceNow change_servicenow_type) change_type {
-	var change change_type
+func (p *ServiceNowPlugin) parseChange(changeServiceNow ChangeServiceNow) Change {
+	var change Change
 
 	p.Logger.Debug(fmt.Sprintf("Change: Type: %s, Number: %s, Short description: %s, Start Date: %s, End Date: %s, SysId: %s",
 		changeServiceNow.Type,
@@ -448,7 +442,7 @@ func (p *ServiceNowPlugin) parseChange(changeServiceNow change_servicenow_type) 
 	return change
 }
 
-func (p *ServiceNowPlugin) checkCI(CI cmdb_servicenow_type) string {
+func (p *ServiceNowPlugin) checkCI(CI CmdbServiceNow) string {
 	errorText := ""
 	installStatus := CI.InstallStatus
 	ciName := CI.Name
@@ -467,7 +461,7 @@ func (p *ServiceNowPlugin) checkCI(CI cmdb_servicenow_type) string {
 	return errorText
 }
 
-func (p *ServiceNowPlugin) checkChange(change change_type) (string, time.Duration) {
+func (p *ServiceNowPlugin) checkChange(change Change) (string, time.Duration) {
 	errorText := ""
 	var remainingTime time.Duration
 	remainingTime = 0
@@ -497,11 +491,11 @@ func (p *ServiceNowPlugin) processCI(ciName string) string {
 	return errorString
 }
 
-func (p *ServiceNowPlugin) processChanges(ciName string) (string, time.Duration, *change_type) {
-	var sysparm_offset = 0
+func (p *ServiceNowPlugin) processChanges(ciName string) (string, time.Duration, *Change) {
+	var SysparmOffset = 0
 
-	serviceNowChanges, sysparm_offset := p.getChanges(ciName, sysparm_offset)
-	var validChange *change_type = nil
+	serviceNowChanges, SysparmOffset := p.getChanges(ciName, SysparmOffset)
+	var validChange *Change = nil
 	var changeRemainingTime time.Duration = 0
 	var remainingTime time.Duration = 0
 
@@ -516,10 +510,10 @@ func (p *ServiceNowPlugin) processChanges(ciName string) (string, time.Duration,
 				break
 			}
 		}
-		if validChange != nil || len(serviceNowChanges) < sysparm_limit {
+		if validChange != nil || len(serviceNowChanges) < SysparmLimit {
 			break
 		} else {
-			serviceNowChanges, sysparm_offset = p.getChanges(ciName, sysparm_offset)
+			serviceNowChanges, SysparmOffset = p.getChanges(ciName, SysparmOffset)
 		}
 	}
 
@@ -558,13 +552,13 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 	if ciName == "\"\"" {
 		errorText := fmt.Sprintf("No CI name found: expected label with name %s in application %s", ciLabel, applicationName)
 		p.Logger.Error(errorText)
-		return p.deny(errorText)
+		return p.denyRequest(errorText)
 	}
 
 	errorString := p.processCI(ciName)
 	if errorString != "" {
 		p.Logger.Error("Access Denied for " + requesterName + " : " + errorString)
-		return p.deny(errorString)
+		return p.denyRequest(errorString)
 	}
 
 	errorString, changeRemainingTime, validChange := p.processChanges(ciName)
@@ -588,10 +582,10 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 		note := fmt.Sprintf("{\"work_notes\":\"%s\"}", grantedAccessServiceNowText)
 		p.postNote(validChange.SysId, note)
-		return p.grant(grantedUIText)
+		return p.grantRequest(grantedUIText)
 	} else {
 		p.Logger.Error(fmt.Sprintf("Access Denied for %s, role %s: %s", requesterName, requestedRole, errorString))
-		return p.deny(errorString)
+		return p.denyRequest(errorString)
 	}
 }
 

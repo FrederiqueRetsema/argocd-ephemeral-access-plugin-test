@@ -1,0 +1,130 @@
+func (m *MockedLogger) Log(level hclog.Level, s string, args ...interface{}) {
+func (m *MockedLogger) Trace(s string, i ...interface{}) {
+func (m *MockedLogger) Debug(s string, i ...interface{}) {
+func (m *MockedLogger) Info(s string, i ...interface{}) {
+func (m *MockedLogger) Warn(s string, i ...interface{}) {
+func (m *MockedLogger) Error(s string, i ...interface{}) {
+func (m *MockedLogger) IsTrace() bool {
+func (m *MockedLogger) IsDebug() bool {
+func (m *MockedLogger) IsInfo() bool {
+func (m *MockedLogger) IsWarn() bool {
+func (m *MockedLogger) IsError() bool {
+func (m *MockedLogger) ImpliedArgs() []interface{} {
+func (m *MockedLogger) With(args ...interface{}) hclog.Logger {
+func (m *MockedLogger) Name() string {
+func (m *MockedLogger) Named(s string) hclog.Logger {
+func (m *MockedLogger) ResetNamed(s string) hclog.Logger {
+func (m *MockedLogger) SetLevel(level hclog.Level) {
+func (m *MockedLogger) GetLevel() hclog.Level {
+func (m *MockedLogger) StandardLogger(opts *hclog.StandardLoggerOptions) *log.Logger {
+func (m *MockedLogger) StandardWriter(opts *hclog.StandardLoggerOptions) io.Writer {
+func testGetPlugin() (*ServiceNowPlugin, *MockedLogger) {
+func (s *HelperMethodsTestSuite) TestGetEnvVarWithPanicNoEnvVar() {
+	defer func() {
+func (s *HelperMethodsTestSuite) TestGetEnvVarWithPanicWithEnvVar() {
+func (s *HelperMethodsTestSuite) TestGetEnvVarWithDefaultNoEnvVar() {
+func (s *HelperMethodsTestSuite) TestGetEnvVarWithDefaultWithEnvVar() {
+func (s *HelperMethodsTestSuite) TestGetLocalTime() {
+func (s *HelperMethodsTestSuite) TestConvertTimeCorrectTime() {
+func (s *HelperMethodsTestSuite) TestConvertTimeIncorrectTime() {
+	defer func() {
+func TestHelperMethods(t *testing.T) {
+func (s *K8SRelatedTestSuite) TestGetK8sConfig() {
+	defer func() {
+func (s *K8SRelatedTestSuite) TestGetCredentialsFromSecret() {
+func (s *K8SRelatedTestSuite) TestGetCredentialsFromSecretSecretDoesntExist() {
+	defer func() {
+func (s *K8SRelatedTestSuite) TestGetCINameEmpty() {
+func (s *K8SRelatedTestSuite) TestGetCINameFilled() {
+func TestK8SRelated(t *testing.T) {
+func (s *PluginHelperMethodsTestSuite) TestGetGlobalVars() {
+func (s *PluginHelperMethodsTestSuite) TestShowRequest() {
+func (s *PluginHelperMethodsTestSuite) TestProcessCI() {
+func testConvertTimeToString(t time.Time) string {
+func (s *PluginHelperMethodsTestSuite) TestProcessChanges() {
+func (s *PluginHelperMethodsTestSuite) TestProcessChangesTwoWindows() {
+func (s *PluginHelperMethodsTestSuite) TestCreateRevokeJobCorrect() {
+func (s *PluginHelperMethodsTestSuite) TestCreateRevokeJobFail() {
+func (s *PluginHelperMethodsTestSuite) TestDetermineDurationAndRealEndTimeChangeTimeWins() {
+func (s *PluginHelperMethodsTestSuite) TestDetermineDurationAndRealEndTimeArDurationWins() {
+func (s *PluginHelperMethodsTestSuite) TestDetermineGrantedTexts() {
+func (s *PluginHelperMethodsTestSuite) TestDeny() {
+func (s *PluginHelperMethodsTestSuite) TestGrant() {
+func setCredentialsSecret(namespace string, secretName string, username string, password string) {
+func (s *PluginHelperMethodsTestSuite) TestGetServiceNowCredentials() {
+func TestPluginHelperMethods(t *testing.T) {
+func simulateSimpleHttpRequestToServiceNow(t *testing.T, responseMap map[string]string) *httptest.Server {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func simulateSimpleHttpRequestWithStatusCodeRedirect(response string) (*httptest.Server, *httptest.Server) {
+	var secondServer *httptest.Server = httptest.NewServer(http.HandlerFunc(func(w2 http.ResponseWriter, r2 *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w1 http.ResponseWriter, r1 *http.Request) {
+func simulateSimpleHttpRequestWithStatusCodeForbidden(response string) *httptest.Server {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func simulateSimpleHttpRequestWithStatusCodeServerSideError(response string) *httptest.Server {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func (s *ServiceNowTestSuite) TestCheckAPIResultNormalResponse() {
+func (s *ServiceNowTestSuite) TestCheckAPIResultForbidden() {
+	defer func() {
+func (s *ServiceNowTestSuite) TestCheckAPIResultBadGateway() {
+	defer func() {
+func (s *ServiceNowTestSuite) TestCheckAPIResultBadGatewayWith200() {
+	defer func() {
+func (s *ServiceNowTestSuite) TestGetFromServiceNowAPIErrorInApiCall() {
+	defer func() {
+func (s *ServiceNowTestSuite) TestgetFromServiceNowAPIError() {
+	defer func() {
+func (s *ServiceNowTestSuite) TestgetFromServiceNowAPINormalResponse() {
+func (s *ServiceNowTestSuite) TestgetFromServiceNowAPINormalResponseWithRedirect() {
+func testPatchServiceNowAPINormalRequest(s *ServiceNowTestSuite, requestURI string, data string, responseText string) {
+func (s *ServiceNowTestSuite) TestPatchServiceNowAPINormalRequest() {
+func (s *ServiceNowTestSuite) TestPostNote() {
+func (s *ServiceNowTestSuite) TestPatchServiceNowAPIErrorInApiCall() {
+	defer func() {
+func (s *ServiceNowTestSuite) TestGetCIServerDown() {
+	defer func() {
+func (s *ServiceNowTestSuite) TestGetCINoJSON() {
+	defer func() {
+func (s *ServiceNowTestSuite) TestGetChangeServerDown() {
+	defer func() {
+func (s *ServiceNowTestSuite) TestGetChangeNoJSON() {
+	defer func() {
+func TestServiceNowMethods(t *testing.T) {
+func (s *CITestSuite) TestGetCINoCI() {
+	defer func() {
+func testPrepareGetCI(t *testing.T, loggerObj *MockedLogger, ciName string, responseText string) (*httptest.Server, string) {
+func (s *CITestSuite) TestGetCIOneCI() {
+func (s *CITestSuite) TestGetCITwoCIs() {
+func TestCIMethods(t *testing.T) {
+func (s *ChangeTestSuite) TestGetChangeNoChange() {
+	defer func() {
+func testPrepareGetChange(t *testing.T, loggerObj *MockedLogger, ciName string, responseMap map[string]string) *httptest.Server {
+func (s *ChangeTestSuite) TestGetChangesOneChange() {
+func (s *ChangeTestSuite) TestGetChangesTwoChanges() {
+func (s *ChangeTestSuite) TestGetChangesExactWindowSize() {
+func (s *ChangeTestSuite) TestParseChange() {
+func TestChangeMethods(t *testing.T) {
+func testAllowedCIStatus(s *CheckCITestSuite, status string) {
+func testNotAllowedCIStatus(s *CheckCITestSuite, status string) {
+func (s *CheckCITestSuite) TestCheckCIInstalled() {
+func (s *CheckCITestSuite) TestCheckCIInMaintenance() {
+func (s *CheckCITestSuite) TestCheckCIPendingInstall() {
+func (s *CheckCITestSuite) TestCheckCIPendingRepair() {
+func (s *CheckCITestSuite) TestCheckCIStateNotAllowed0() {
+func (s *CheckCITestSuite) TestCheckCIState2() {
+func (s *CheckCITestSuite) TestCheckCIState6() {
+func TestCheckCI(t *testing.T) {
+func testChangeTimeIncorrect(s *CheckChangeTestSuite, currentTime time.Time, startDate time.Time, endDate time.Time) {
+func (s *CheckChangeTestSuite) TestCheckChangeTooEarly() {
+func (s *CheckChangeTestSuite) TestCheckChangeCorrectTime() {
+func (s *CheckChangeTestSuite) TestCheckChangeTooLate() {
+func TestCheckChange(t *testing.T) {
+func simulateGlobalHttpRequestToServiceNow(startDateString string, endDateString string, installStatus string) *httptest.Server {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func testGetArApp() (api.AccessRequest, argocd.Application) {
+func (s *PublicMethodsTestSuite) TestInit() {
+func (s *PublicMethodsTestSuite) TestGrantAccess() {
+func (s *PublicMethodsTestSuite) TestGrantAccessNoCIName() {
+func (s *PublicMethodsTestSuite) TestGrantAccessIncorrectCI() {
+func (s *PublicMethodsTestSuite) TestGrantAccessNoChange() {
+func (s *PublicMethodsTestSuite) TestRevokeAccess() {
+func TestPublicMethods(t *testing.T) {

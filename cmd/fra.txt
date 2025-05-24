@@ -1,0 +1,1 @@
+	NUMBER=$(grep -n -i $FUNC ./service-now-plugin_test.go | grep func | head -n 1 | awk -F':' '{print $1}')
