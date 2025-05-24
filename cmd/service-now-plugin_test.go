@@ -1375,15 +1375,6 @@ func (s *ChangeTestSuite) TestGetChangeNoChange() {
 	p, loggerObj := testGetPlugin()
 
 	responseText := "{\"result\":[]}"
-	expectedErrorText := "No changes found"
-
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Println("Recovered panic text:", r)
-			s.Assertions.Equal(expectedErrorText, fmt.Sprintf("%v", r), "Panic text is correct")
-		}
-		loggerObj.AssertExpectations(t)
-	}()
 
 	serviceNowUsername = "testUser"
 	serviceNowPassword = "testPassword"
@@ -1402,9 +1393,12 @@ func (s *ChangeTestSuite) TestGetChangeNoChange() {
 
 	loggerObj.On("Debug", fmt.Sprintf("apiCall: %s", apiCall))
 	loggerObj.On("Debug", responseText)
-	loggerObj.On("Error", expectedErrorText)
+	loggerObj.On("Info", "No changes found")
 
-	_, _ = p.getChanges(ciName, 0)
+	changes, newPointer := p.getChanges(ciName, 0)
+
+	s.Assertions.Equal(0, len(changes), "No changes should be found")
+	s.Assertions.Equal(0, newPointer, "New value for offset should be 0")
 }
 
 func testPrepareGetChange(t *testing.T, loggerObj *MockedLogger, ciName string, responseMap map[string]string) *httptest.Server {

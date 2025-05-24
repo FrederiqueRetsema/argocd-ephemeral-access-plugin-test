@@ -20,6 +20,8 @@ spec:
       containers:
         - name: controller
           env:
+            - name: SECRET_NAMESPACE
+              value: argocd-ephemeral-access
             - name: SERVICENOW_SECRET_NAME
               value: CHANGE_THIS_WITH_THE_SERVICENOW_SECRET_NAME
             - name: SERVICE_NOW_URL
@@ -28,12 +30,10 @@ spec:
               value: incidentmanager
             - name: TIMEZONE
               value: Europe/Amsterdam
-            - name: SECRET_NAMESPACE
-              value: argocd-ephemeral-access
-            - name: EPHEMERAL_PLUGIN_PATH
-              value: /tmp/plugin/plugin
             - name: CI_LABEL
               value: ci_name
+            - name: EPHEMERAL_PLUGIN_PATH
+              value: /tmp/plugin/plugin
           volumeMounts:
             - name: plugins
               mountPath: /tmp/plugin/

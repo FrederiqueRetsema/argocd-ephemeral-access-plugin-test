@@ -443,8 +443,7 @@ func (p *ServiceNowPlugin) getChanges(ciName string, SysparmOffset int) ([]*Chan
 
 	if len(changeResults.Result) == 0 {
 		errorText := "No changes found"
-		p.Logger.Error(errorText)
-		panic(errorText)
+		p.Logger.Info(errorText)
 	}
 
 	return changeResults.Result, SysparmOffset + len(changeResults.Result)
@@ -539,7 +538,10 @@ func (p *ServiceNowPlugin) processChanges(ciName string) (string, time.Duration,
 				break
 			}
 		}
-		if validChange != nil || len(serviceNowChanges) < SysparmLimit {
+		if validChange != nil {
+			break
+		} else if len(serviceNowChanges) < SysparmLimit {
+			errorString = "No valid change found"
 			break
 		} else {
 			serviceNowChanges, SysparmOffset = p.getChanges(ciName, SysparmOffset)
