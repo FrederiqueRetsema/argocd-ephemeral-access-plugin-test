@@ -599,7 +599,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 		duration, endDateTime := p.determineDurationAndRealEndTime(arDuration, changeRemainingTime, validChange.EndDate)
 		ar.Spec.Duration.Duration = duration
 
-		// AbortJob is only needed when the end date of the change is more than the default for the access request time in
+		// AbortJob is only needed when the end date of the change is earlier than the default for the access request time in
 		// the future, otherwise the ArgoCD Ephemeral Access Extension will revoke the permissions
 		if arDuration > changeRemainingTime {
 			p.createRevokeJob(namespace, arName, validChange.EndDate)
