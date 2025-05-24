@@ -59,7 +59,7 @@ type Change struct {
 	SysId            string
 }
 
-type change_results_servicenow_type struct {
+type ChangeResultsServicenow struct {
 	Result []*ChangeServiceNow `json:"result"`
 }
 
@@ -71,7 +71,7 @@ var serviceNowUrl string
 var serviceNowUsername string
 var serviceNowPassword string
 var ciLabel string
-var exclusionGroups []string
+var exclusionRoles []string
 var timezone string
 var k8sconfig *rest.Config
 var k8sclientset kubernetes.Interface
@@ -151,8 +151,8 @@ func (p *ServiceNowPlugin) getGlobalVars() {
 	serviceNowUrl = p.getEnvVarWithPanic("SERVICE_NOW_URL", "No Service Now URL given (environment variable SERVICE_NOW_URL is empty)")
 	timezone = p.getEnvVarWithDefault("TIMEZONE", "UTC")
 	ciLabel = p.getEnvVarWithDefault("CI_LABEL", "ci-name")
-	exclusionGroupsString := p.getEnvVarWithDefault("EXCLUSION_GROUPS", "")
-	exclusionGroups = strings.Split(exclusionGroupsString, ",")
+	exclusionRolesString := p.getEnvVarWithDefault("EXCLUSION_ROLES", "")
+	exclusionRoles = strings.Split(exclusionRolesString, ",")
 	p.getK8sConfig()
 
 	serviceNowUsername, serviceNowPassword = p.getServiceNowCredentials()
@@ -269,14 +269,15 @@ func (p *ServiceNowPlugin) determineGrantedTextsChange(requesterName string, req
 
 func (p *ServiceNowPlugin) determineGrantedTextsExclusions(requesterName string, requestedRole string, remainingTime time.Duration, realEndDate time.Time) string {
 
-	grantedAccessText := fmt.Sprintf("Granted access for %s: role %s, from %s to %s (no change, %s is part of the exclusion group)",
+	grantedAccessText := fmt.Sprintf("Granted access for %s: role %s, from %s to %s (no change, %s is an exclusion role)",
 		requesterName,
 		requestedRole,
 		time.Now().Truncate(time.Minute),
 		realEndDate.Truncate(time.Minute),
 		requestedRole)
 
-	grantedAccessUIText := fmt.Sprintf("Granted access: part of exclusion group, until __%s (%s)__",
+	grantedAccessUIText := fmt.Sprintf("Granted access: %s is an exclusion role, until __%s (%s)__",
+		requestedRole,
 		p.getLocalTime(realEndDate),
 		remainingTime.Truncate(time.Second).String())
 
@@ -432,7 +433,7 @@ func (p *ServiceNowPlugin) getChanges(ciName string, SysparmOffset int) ([]*Chan
 	requestURI := fmt.Sprintf("/api/now/table/change_request?cmdb_ci=%s&state=Implement&phase=Requested&approval=Approved&active=true&sysparm_fields=type,number,short_description,start_date,end_date,sys_id&sysparm_limit=%d&sysparm_offset=%d", ciName, SysparmLimit, SysparmOffset)
 	response := p.getFromServiceNowAPI(requestURI)
 
-	var changeResults change_results_servicenow_type
+	var changeResults ChangeResultsServicenow
 	err := json.Unmarshal(response, &changeResults)
 	if err != nil {
 		errorText := fmt.Sprintf("Error in json.Unmarshal: %s (%s)", err.Error(), response)
@@ -576,7 +577,7 @@ func (p *ServiceNowPlugin) GrantAccess(ar *api.AccessRequest, app *argocd.Applic
 
 	p.getGlobalVars()
 
-	if slices.Contains(exclusionGroups, requestedRole) {
+	if slices.Contains(exclusionRoles, requestedRole) {
 		endTime := time.Now().Add(arDuration)
 		grantedUIText := p.determineGrantedTextsExclusions(requesterName, requestedRole, arDuration, endTime)
 

@@ -403,7 +403,7 @@ func (s *PluginHelperMethodsTestSuite) TestGetGlobalVars() {
 	s.Assertions.Equal("UTC", timezone, "Default timezone should be UTC")
 	s.Assertions.Equal(testUsername, serviceNowUsername, "ServiceNow username should be correct")
 	s.Assertions.Equal(testPassword, serviceNowPassword, "ServiceNow password should be correct")
-	s.Assertions.Equal([]string{""}, exclusionGroups, "Default for exclusion groups is empty")
+	s.Assertions.Equal([]string{""}, exclusionRoles, "Default for exclusion roles is empty")
 	loggerObj.AssertExpectations(t)
 }
 
@@ -413,7 +413,7 @@ func (s *PluginHelperMethodsTestSuite) TestGetGlobalVarsExclusionGroupsWithValue
 
 	exampleUrl := "https://example.com"
 	os.Setenv("SERVICE_NOW_URL", exampleUrl)
-	os.Setenv("EXCLUSION_GROUPS", "incidentmanagers")
+	os.Setenv("EXCLUSION_ROLES", "incidentmanagers")
 
 	secretName := "servicenow-secret"
 	namespace := "argocd-ephemeral-access"
@@ -426,17 +426,17 @@ func (s *PluginHelperMethodsTestSuite) TestGetGlobalVarsExclusionGroupsWithValue
 	unittest = true
 	p.getGlobalVars()
 
-	s.Assertions.Equal([]string{"incidentmanagers"}, exclusionGroups, "Exclusion groups should be correct")
+	s.Assertions.Equal([]string{"incidentmanagers"}, exclusionRoles, "Exclusion roles should be correct")
 	loggerObj.AssertExpectations(t)
 }
 
-func (s *PluginHelperMethodsTestSuite) TestGetGlobalVarsExclusionGroupsWithTwoValues() {
+func (s *PluginHelperMethodsTestSuite) TestGetGlobalVarsExclusionRolesWithTwoValues() {
 	t := s.T()
 	p, loggerObj := testGetPlugin()
 
 	exampleUrl := "https://example.com"
 	os.Setenv("SERVICE_NOW_URL", exampleUrl)
-	os.Setenv("EXCLUSION_GROUPS", "administrators,incidentmanagers")
+	os.Setenv("EXCLUSION_ROLES", "administrators,incidentmanagers")
 
 	secretName := "servicenow-secret"
 	namespace := "argocd-ephemeral-access"
@@ -449,7 +449,7 @@ func (s *PluginHelperMethodsTestSuite) TestGetGlobalVarsExclusionGroupsWithTwoVa
 	unittest = true
 	p.getGlobalVars()
 
-	s.Assertions.Equal([]string{"administrators", "incidentmanagers"}, exclusionGroups, "Exclusion groups should be correct")
+	s.Assertions.Equal([]string{"administrators", "incidentmanagers"}, exclusionRoles, "Exclusion groups should be correct")
 	loggerObj.AssertExpectations(t)
 }
 
@@ -642,13 +642,14 @@ func (s *PluginHelperMethodsTestSuite) TestDetermineGrantedTextsExclusions() {
 	var remainingTime time.Duration = 1 * time.Hour
 	realEndDate := time.Now().Add(remainingTime)
 
-	expectedGrantedAccessText := fmt.Sprintf("Granted access for %s: role %s, from %s to %s (no change, %s is part of the exclusion group)",
+	expectedGrantedAccessText := fmt.Sprintf("Granted access for %s: role %s, from %s to %s (no change, %s is an exclusion role)",
 		requesterName,
 		requestedRole,
 		time.Now().Truncate(time.Minute),
 		realEndDate.Truncate(time.Minute),
 		requestedRole)
-	expectedGrantedAccessUIText := fmt.Sprintf("Granted access: part of exclusion group, until __%s (%s)__",
+	expectedGrantedAccessUIText := fmt.Sprintf("Granted access: %s is an exclusion role, until __%s (%s)__",
+		requestedRole,
 		p.getLocalTime(realEndDate),
 		remainingTime.Truncate(time.Second).String())
 
@@ -1862,7 +1863,7 @@ func (s *PublicMethodsTestSuite) TestGrantAccess() {
 
 	ar, app := testGetArApp()
 
-	os.Setenv("EXCLUSION_GROUPS", "")
+	os.Setenv("EXCLUSION_ROLES", "")
 	os.Setenv("TIMEZONE", "UTC")
 	currentTime := time.Now()
 	startDate := currentTime.Add(-5 * time.Minute)
@@ -1909,7 +1910,7 @@ func (s *PublicMethodsTestSuite) TestGrantAccess() {
 	loggerObj.AssertExpectations(t)
 }
 
-func (s *PublicMethodsTestSuite) TestGrantAccessExclusionGroup() {
+func (s *PublicMethodsTestSuite) TestGrantAccessExclusionRole() {
 	t := s.T()
 
 	p, loggerObj := testGetPlugin()
@@ -1921,9 +1922,10 @@ func (s *PublicMethodsTestSuite) TestGrantAccessExclusionGroup() {
 	os.Setenv("TIMEZONE", "UTC")
 	loggerObj.On("Debug", mock.Anything)
 	loggerObj.On("Info", mock.Anything)
+	loggerObj.On("Warn", mock.Anything)
 
-	os.Setenv("EXCLUSION_GROUPS", "changemanagers")
-	ar.Spec.Role.TemplateRef.Name = "changemanagers"
+	os.Setenv("EXCLUSION_ROLES", "incidentmanagers")
+	ar.Spec.Role.TemplateRef.Name = "incidentmanagers"
 
 	response, err := p.GrantAccess(&ar, &app)
 
